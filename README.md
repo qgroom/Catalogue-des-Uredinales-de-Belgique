@@ -1,4 +1,4 @@
-# Catalogue-des-Uredinales-de-Belgique
+# Catalogue des Uredinales de Belgique
 A checklist created from the published volumes of the "Catalogue des Uredinales de Belgique" (The rust fungi of Belgium)
 
 * Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique
