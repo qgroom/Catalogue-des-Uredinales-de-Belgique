@@ -82,3 +82,15 @@ vdigest <- Vectorize(digest)
 raw_data %<>% mutate(taxon_id = paste("uredinales-belgium", "taxon", vdigest(scientificName, algo="md5"), sep=":"))
 ```
 
+Further processing:
+
+```{r}
+# Although most column names in `raw_data` have already been mapped to Darwin Core terms, some terms are missing. Additionally, not all terms belong to the same DwC Archive (Core or Extensions) and we want to clean and reorder the terms within one Archive. Therefore, we first add a prefix `raw_` to all column names in `raw_data`, we generate the DwC Archive files and we remove all `raw_` column names afterwards. 
+
+# Add prefix `raw_` to all column names in `raw_data`:
+colnames(raw_data) <- paste0("raw_", colnames(raw_data))
+
+# Save those column names as a vector (makes it easier to remove them all later):
+raw_colnames <- colnames(raw_data)
+```
+ 
