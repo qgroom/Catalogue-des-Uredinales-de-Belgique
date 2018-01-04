@@ -70,3 +70,15 @@ raw_data %<>%
   remove_empty_rows()     # Remove empty rows
 ```
 
+## Generate taxonID
+
+To uniquely identify a taxon in the Taxon Core and reference taxa in the Extensions, we need a `taxonID`. Since we need it in all generated files, we generate it here in the raw data frame. It is a combination of `dataset-shortname:taxon:` and a hash based on the scientific name. As long as the scientific name doesn't change, the ID will be stable: 
+
+```{r}
+# Vectorize the digest function (The digest() function isn't vectorized. So if you pass in a vector, you get one value for the whole vector rather than a digest for each element of the vector):
+vdigest <- Vectorize(digest)
+
+# Generate taxonID:
+raw_data %<>% mutate(taxon_id = paste("uredinales-belgium", "taxon", vdigest(scientificName, algo="md5"), sep=":"))
+```
+
