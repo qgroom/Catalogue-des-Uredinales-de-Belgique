@@ -93,7 +93,14 @@ colnames(raw_data) <- paste0("raw_", colnames(raw_data))
 # Save those column names as a vector (makes it easier to remove them all later):
 raw_colnames <- colnames(raw_data)
 ```
- # Create Taxon core
+
+Preview data:
+
+```{r}
+head(raw_data)
+```
+
+# Create Taxon core
 
 ## Pre-processing
 
