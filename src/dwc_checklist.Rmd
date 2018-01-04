@@ -93,4 +93,58 @@ colnames(raw_data) <- paste0("raw_", colnames(raw_data))
 # Save those column names as a vector (makes it easier to remove them all later):
 raw_colnames <- colnames(raw_data)
 ```
+ # Create Taxon core
+
+## Pre-processing
+
+```{r}
+taxon <- raw_data
+```
+
+## Term (re)mapping
  
+Map the source data to [Darwin Core Taxon](http://rs.gbif.org/core/dwc_taxon_2015-04-24.xml):
+ 
+### language
+
+```{r}
+taxon %<>% mutate(language = "en")
+```
+
+### license
+
+```{r}
+taxon %<>% mutate(license = "http://creativecommons.org/publicdomain/zero/1.0/")
+```
+
+### rightsHolder
+
+```{r}
+taxon %<>% mutate(rightsHolder = "INBO")
+
+```
+
+### accessRights
+
+```{r}
+taxon %<>% mutate(accessRights = "http://www.inbo.be/en/norms-for-data-use")
+```
+
+### datasetID
+
+```{r}
+taxon %<>% mutate(datasetID = "")
+```
+
+### datasetName
+
+```{r}
+taxon %<>% mutate(datasetName = "Checklist of the rust fungi of Belgium")
+```
+
+### taxonID
+### scientificName
+### kingdom
+### family
+### taxonRank
+### nomenclaturalCode
