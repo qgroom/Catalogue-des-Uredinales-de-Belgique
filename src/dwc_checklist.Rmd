@@ -137,6 +137,21 @@ taxon %<>% mutate(rightsHolder = "INBO")
 taxon %<>% mutate(accessRights = "http://www.inbo.be/en/norms-for-data-use")
 ```
 
+### bibliographicCitation
+
+This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. Information on the volumes is contained in `raw_part`. We will complement the volume number with the full reference (given in the metadata). For this, we create the matrix `full_reference`:
+
+```{r, echo = F}
+(full_reference <- as.data.frame(matrix(
+  c("1", "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
+    "2", "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
+    "3", "Vanderweyen, A., & Fraiture, A. (2012). Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
+  nrow = 3, 
+  ncol = 2, 
+  byrow = T,
+  dimnames = list (c(1:3), c("raw_part", "full_reference")))))
+```
+
 ### datasetID
 
 ```{r}
