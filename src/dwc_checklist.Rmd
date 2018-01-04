@@ -18,10 +18,55 @@ output:
 knit: (function(input_file, encoding) { rmarkdown::render(input_file, encoding = encoding, output_file = paste0("../docs/",sub(".Rmd", ".html", basename(input_file))))})
 ---
 
+The data in the raw file has already been mapped to Darwin Core terms. 
+This document describes how we further process the data to render the Taxon Core file and the different Extensions.
+
 # Setup
 
 ```{r, echo = FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
+Set locale (so we use UTF-8 character encoding):
+
+```{r, eval = F}
+# This works on Mac OS X, might not work on other OS
+Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
+```
+
+Load libraries:
+
+```{r}
+library(tidyverse) # For data transformations
+
+# None core tidyverse packages:
+library(magrittr)  # For %<>% pipes
+
+# Other packages
+library(janitor)   # For cleaning input data
+library(digest)    # Create hash function digests
+```
+
+Set file paths (all paths should be relative to this script):
+ 
+```{r}
+# Raw files:
+raw_data_file = "../data/raw/checklist of rusts.tsv"
+
+# Processed files:
+
+```
+
+# Read data
+
+Create a data frame `raw_data` from the source data:
+
+```{r}
+# Read the source data:
+raw_data <- read.table(raw_data_file, header = T, sep = "\t") 
+
+# Clean the data somewhat: remove empty rows if present
+raw_data %<>%
+  remove_empty_rows()     # Remove empty rows
+```
 
