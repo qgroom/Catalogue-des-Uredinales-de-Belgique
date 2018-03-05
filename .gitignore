@@ -34,3 +34,4 @@ vignettes/*.pdf
 
 # Draft files
 draft.*
+.Rproj.user
