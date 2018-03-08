@@ -1,0 +1,54 @@
+{
+  "columns": [
+    {
+      "name": "sourceTaxonName",
+      "titles": "scientificName",
+      "datatype": "string"
+    },
+    {
+      "name": "catalogNumber",
+      "titles": "catalogNumber",
+      "datatype": "string"
+    },
+    {
+      "name": "part",
+      "titles": "part",
+      "datatype": "string"
+    },
+    {
+      "name": "page",
+      "titles": "page",
+      "datatype": "string"
+    },
+    {
+      "name": "from",
+      "titles": "from",
+      "datatype": "string"
+    },
+    {
+      "name": "to",
+      "titles": "to",
+      "datatype": "string"
+    },
+    {
+      "name": "eventDate",
+      "titles": "eventDate",
+      "datatype": "string"
+    },
+    {
+      "name": "sourceTaxonRank",
+      "titles": "taxonRank",
+      "datatype": "string"
+    },
+    {
+      "name": "sourceTaxonFamily",
+      "titles": "family",
+      "datatype": "string"
+    },
+    {
+      "name": "associatedTaxa",
+      "titles": "associatedTaxa",
+      "datatype": "string"
+    }
+  ]
+}
