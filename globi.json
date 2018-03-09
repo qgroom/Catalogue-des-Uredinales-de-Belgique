@@ -9,8 +9,5 @@
       "null": ["NA"],
       "headerRowCount": 1
     }
-  ],
-  "resources": {
-    "data/raw/checklist-of-rusts.tsv": "data/raw/checklist-of-rusts.tsv"
-  }
+  ]
 }
