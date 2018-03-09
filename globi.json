@@ -1,0 +1,13 @@
+{
+  "@context": ["http://www.w3.org/ns/csvw", {"@language": "en"}],
+  "rdfs:comment": ["inspired by https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/"],
+  "tables": [
+    { "url": "data/raw/checklist-of-rusts.tsv",
+      "dcterms:bibliographicCitation": "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique|Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.|Vanderweyen, A., & Fraiture, A. (2012). CATALOGUE DES UREDINALES DE Belgique 3ème partie Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique.",
+      "tableSchema": "schema.json",
+      "delimiter": "\t",
+      "null": ["NA"],
+      "headerRowCount": 1
+    }
+  ]
+}
