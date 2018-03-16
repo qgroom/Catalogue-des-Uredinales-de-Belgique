@@ -81,14 +81,12 @@ To uniquely identify a taxon in the Taxon Core and reference taxa in the Extensi
 vdigest <- Vectorize(digest)
 
 # Generate taxonID:
-raw_data %<>% mutate(taxon_id = paste("uredinales-belgium", "taxon", vdigest(scientificName, algo="md5"), sep=":"))
+raw_data %<>% mutate(taxon_id = paste("uredinales-belgium-checklist", "taxon", vdigest(scientificName, algo="md5"), sep=":"))
 ```
 
-Further processing:
+Create a data frame `raw_data` from the source data:
 
 ```{r}
-# Although most column names in `raw_data` have already been mapped to Darwin Core terms, some terms are missing. Additionally, not all terms belong to the same DwC Archive (Core or Extensions) and we want to clean and reorder the terms within one Archive. Therefore, we first add a prefix `raw_` to all column names in `raw_data`, we generate the DwC Archive files and we remove all `raw_` column names afterwards. 
-
 # Add prefix `raw_` to all column names in `raw_data`:
 colnames(raw_data) <- paste0("raw_", colnames(raw_data))
 
@@ -185,29 +183,56 @@ taxon %<>% mutate(license = "http://creativecommons.org/publicdomain/zero/1.0/")
 ### rightsHolder
 
 ```{r}
-taxon %<>% mutate(rightsHolder = "INBO")
+taxon %<>% mutate(rightsHolder = "Botanical Garden Meise")
 
-```
-
-### accessRights
-
-```{r}
-taxon %<>% mutate(accessRights = "http://www.inbo.be/en/norms-for-data-use")
 ```
 
 ### bibliographicCitation
 
-This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. Information on the volumes is contained in `raw_part`. We will complement the volume number with the full reference (given in the metadata). For this, we create the matrix `full_reference`:
+This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each species, a volume number (`raw_part`) and a page number (`raw_page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. The `bibliographicCitation` will contain the full reference with page number. 
+
+First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
 
 ```{r, echo = F}
 (full_reference <- as.data.frame(matrix(
-  c("1", "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
-    "2", "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
-    "3", "Vanderweyen, A., & Fraiture, A. (2012). Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
+  c(1, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
+    2, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
+    3, "Vanderweyen, A., & Fraiture, A. (2012). Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
   nrow = 3, 
   ncol = 2, 
   byrow = T,
   dimnames = list (c(1:3), c("raw_part", "full_reference")))))
+
+```
+
+To join both data frames, `raw_part` in `full_reference` should be an integer:
+
+```{r}
+full_reference %<>% mutate(raw_part = as.integer(raw_part))
+```
+
+Join both data frames:
+
+```{r}
+taxon <- left_join(taxon, full_reference, by = "raw_part")
+```
+
+For the `bibliographicCitation` to be complete, we need to add the page information specified for each species:
+
+```{r}
+taxon %<>% mutate(bibliographicCitation = paste(full_reference, "Page:", raw_page))
+```
+
+Remove `full_reference`:
+
+```{r}
+taxon %<>% select(-full_reference)
+```
+
+### institutionID
+
+```{r}
+taxon %<>% mutate(institutionID = "http://biocol.org/urn:lsid:biocol.org:col:15605")
 ```
 
 ### datasetID
@@ -219,12 +244,116 @@ taxon %<>% mutate(datasetID = "")
 ### datasetName
 
 ```{r}
-taxon %<>% mutate(datasetName = "Checklist of the rust fungi of Belgium")
+taxon %<>% mutate(datasetName = "Checklist of the Rust Fungi of Belgium")
 ```
 
 ### taxonID
+
+```{r}
+taxon %<>% mutate(taxonID = raw_taxon_id)
+```
+
 ### scientificName
+
+```{r}
+taxon %<>% mutate(scientificName = raw_scientificName)
+```
+
 ### kingdom
+
+```{r}
+taxon %<>% mutate(kingdom = "Fungi")
+```
+
+### phylum
+
+```{r}
+taxon %<>% mutate(phylum = "Basidiomycota")
+```
+
+### order
+
+```{r}
+taxon %<>% mutate(order = "Uredinales")
+```
+
 ### family
+
+```{r}
+taxon %<>% mutate(family = raw_family)
+```
+
+### genus
+
+```{r}
+taxon %<>% mutate(genus = pn_genusorabove)
+```
+
+### specificEpithet
+
+```{r}
+taxon %<>% mutate(specificEpithet = pn_specificepithet)
+```
+
+### infraspecificEpithet
+
+```{r}
+taxon %<>% mutate(infraspecificEpithet = pn_infraspecificepithet)
+```
+
 ### taxonRank
+
+Information for `taxonRank` is contained in `pn_rankmarker`:
+
+```{r}
+taxon %>% distinct(pn_rankmarker)
+```
+
+Generate `taxonRank`by recoding abbreviations:
+
+```{r}
+taxon %<>% mutate(taxonRank = recode(pn_rankmarker,
+  "sp."  = "species",
+  "var." = "variety"))
+```
+
+### scientificNameAuthorship
+
+The format specifications for `scientificNameAuthorship` is given [here](http://rs.tdwg.org/dwc/terms/history/index.htm#scientificNameAuthorship-2009-04-24).The mapping is as follows:
+* no (bracket)authorship provided: `scientificNameAuthorship` is left blank.
+* only authorship is provided, no information on bracketauthorship: we copy values in `pn_authorship`..
+* both authorship and bracketauthorship is provided: the required format here is (bracketauthorship) authorship.
+
+```{r}
+taxon %<>% mutate(scientificNameAuthorship = case_when(
+  pn_bracketauthorship != "" & pn_authorship != "" ~ paste( paste0("(", pn_bracketauthorship, ")"), pn_authorship, sep =" "),
+  pn_bracketauthorship == "" & pn_authorship != "" ~ pn_authorship,
+  TRUE ~ ""))
+```
+
 ### nomenclaturalCode
+
+```{r}
+taxon %<>% mutate(nomenclaturalCode = "ICBN")
+```
+
+## Post-processing
+
+Remove the original columns:
+
+```{r}
+taxon %<>% select(-one_of(raw_colnames, pn_colnames))
+```
+
+Preview data:
+
+```{r}
+head(taxon)
+```
+
+Save to CSV:
+
+```{r}
+write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+```
+
