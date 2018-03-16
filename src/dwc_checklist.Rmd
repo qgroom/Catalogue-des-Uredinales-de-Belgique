@@ -357,3 +357,190 @@ Save to CSV:
 write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
 ```
 
+# Create Distribution extension
+  
+## Pre-processing
+
+```{r}
+distribution <- raw_data
+```
+
+## Term mapping
+
+### taxonID
+
+```{r}
+distribution %<>% mutate(taxonID = raw_taxon_id)
+```
+
+### locationID
+
+```{r}
+distribution %<>% mutate(locationID = "ISO_3166-2:BE")
+```
+
+### locality
+
+```{r}
+distribution %<>% mutate(locality = "Belgium")
+```
+
+### countryCode
+
+```{r}
+distribution %<>% mutate(countryCode = "BE")
+```
+
+### occurrenceStatus
+
+Information for `occurrenceStatus` is contained in `raw_occurrenceStatus`:
+
+```{r}
+distribution %>% distinct(raw_occurrenceStatus)
+```
+
+These values are conform the [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources).
+
+```{r}
+distribution %<>% mutate(occurrenceStatus = raw_occurrenceStatus)
+```
+
+### establishmentMeans
+
+establishmentMeans information is contained in `raw_Column`:
+
+```{r}
+distribution %>% distinct(raw_Column)
+```
+
+`native` is not part of the [establishmentMeans vocabulary](http://rs.gbif.org/vocabulary/gbif/establishment_means.xml). Here, we use `introduced`:
+
+```{r}
+distribution %<>% mutate(establishmentMeans = recode(raw_Column,
+  "native" = "introduced"))
+```
+
+### eventDate
+
+eventDate information is contained in `raw_from` (date of first observation) and `raw_to` (date of last observation). We will map this information as a ISO 8601 date range (start_date / end_date). For this, we need to clean and merge the information in `raw_from` and `raw_to`.
+
+`raw_from` contains the information for the first observation. At this point, the following date formats are given: `dd.m.yyyy`, `m.yyyy`, `m/yyyy` and `yyyy`, with the information for the days and years expressed as arabic numericals and for the months as arabic or roman numericals. We need to split `raw_from` to convert the roman numericals.
+
+```{r}
+distribution %<>% separate(raw_from, 
+                           into = c("day", "month", "year"),
+                           remove = FALSE,
+                           extra = "merge",
+                           fill = "left")     
+```
+
+Convert roman to arabic numericals in  `month`:
+
+```{r}
+distribution %<>% mutate(month = recode(month,
+    "I"   = "01",
+    "II"  = "02",
+    "III" = "03",
+    "IV"  = "04",
+    "V"   = "05",
+    "VI"  = "06",
+    "VII" = "07",
+    "VIII"= "08",
+    "IX"  = "09",
+    "X"   = "10",
+    "XI"  = "11",
+    "XII" = "12"))
+```
+
+
+We remerge the year, month and day information for the date of first observation and express this in a ISO 8601 format. we need to add the leading zeros to months (using `sprintf`), we combine year, month and date information with "-" (using `paste`) and we strip the trailing "-NA" if day or month is "NA" (using `gsub`):
+
+```{r}
+distribution %<>% mutate(start_date = 
+  gsub("-NA", "",
+       paste(year, 
+             sprintf("%02d", as.integer(month)),
+             sprintf("%02d", as.integer(day)),
+             sep = "-")))
+```
+
+Compare the first records of `start_date` with `raw_from`:
+
+```{r}
+distribution %>% select(raw_from, start_date) %>% head(n = 20)
+```
+
+remove `day`, `month` and `year`:
+
+```{r}
+distribution %<>% select(-day, -month, -year)
+```
+
+
+The information for the date of the last observation is contained in `raw_to`.
+The same principles and steps can be repeated for the mapping of `raw_to` into `end_date`
+
+Separate `raw_to` into `day`, `month` and `year`:
+
+```{r}
+distribution %<>% separate(raw_to, 
+                           into = c("day", "month", "year"),
+                           remove = FALSE,
+                           extra = "merge",
+                           fill = "left")     
+```
+
+Convert roman to arabic numericals in  `month`:
+
+```{r}
+distribution %<>% mutate(month = recode(month,
+    "I"   = "01",
+    "II"  = "02",
+    "III" = "03",
+    "IV"  = "04",
+    "V"   = "05",
+    "VI"  = "06",
+    "VII" = "07",
+    "VIII"= "08",
+    "IX"  = "09",
+    "X"   = "10",
+    "XI"  = "11",
+    "XII" = "12"))
+```
+
+we need  add the leading zeros to months (using `sprintf`), we combine year, month and date information with "-" (using `paste`) and we strip the trailing "-NA" if day or month is "NA" (using `gsub`):
+
+```{r}
+distribution %<>% mutate(end_date = 
+  gsub("-NA", "",
+       paste(year, 
+             sprintf("%02d", as.integer(month)),
+             sprintf("%02d", as.integer(day)),
+             sep = "-")))
+```
+
+Compare the first records of `start_date` with `raw_from`:
+
+```{r}
+distribution %>% select(raw_to, end_date) %>% head(n = 20)
+```
+
+remove `day`, `month` and `year`:
+
+```{r}
+distribution %<>% select(-day, -month, -year)
+```
+
+Merge `start_date` and `end_date` in `eventDate`:
+
+```{r}
+distribution %<>% mutate(eventDate = paste(start_date, end_date, sep = "/"))
+```
+
+Remove "/NA" or "NA/NA":
+
+```{r}
+distribution %<>% mutate(eventDate = gsub("([/][N][A]|([NA]{2}[/][NA]{2}))", "", eventDate))
+```
+
+### source
