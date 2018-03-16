@@ -5,7 +5,6 @@ author:
 - Lien Reyserhove
 - Peter Desmet
 - Quentin Groom
-- Dimitri Brosens
 date:"`r Sys.Date()`"
 output:
   html_document:
@@ -18,8 +17,7 @@ output:
 knit: (function(input_file, encoding) { rmarkdown::render(input_file, encoding = encoding, output_file = paste0("../docs/",sub(".Rmd", ".html", basename(input_file))))})
 ---
 
-The data in the raw file has already been mapped to Darwin Core terms. 
-This document describes how we further process the data to render the Taxon Core file and the different Extensions.
+This document describes how we map the checklist data to Darwin Core.
 
 # Setup
 
@@ -45,16 +43,20 @@ library(magrittr)  # For %<>% pipes
 # Other packages
 library(janitor)   # For cleaning input data
 library(digest)    # Create hash function digests
+library(readr)     # To read a delimited file into a tibble
+library(rgbif)     # Interface to the GBIF API
+library(stringi)   # For fast and convenient string manipulation
 ```
 
 Set file paths (all paths should be relative to this script):
  
 ```{r}
 # Raw files:
-raw_data_file = "../data/raw/checklist of rusts.tsv"
+raw_data_file = "../data/raw/checklist-of-rusts.tsv"
 
 # Processed files:
-
+dwc_taxon_file = "../data/processed/taxon.csv"
+dwc_distribution_file = "../data/processed/distribution.csv"
 ```
 
 # Read data
@@ -63,7 +65,7 @@ Create a data frame `raw_data` from the source data:
 
 ```{r}
 # Read the source data:
-raw_data <- read.table(raw_data_file, header = T, sep = "\t") 
+raw_data <- read_delim(raw_data_file, delim = "\t") 
 
 # Clean the data somewhat: remove empty rows if present
 raw_data %<>%
