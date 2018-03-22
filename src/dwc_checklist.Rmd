@@ -101,7 +101,7 @@ host_plant %<>% separate(
 Gather all host species in one row (omitting "NA"):
 
 ```{r}
-host_plant %<>% gather("species", "scientificName", starts_with("species"), na.rm = FALSE)
+host_plant %<>% gather("species", "scientificName", starts_with("species"), na.rm = TRUE)
 ```
 
 Remove leading whitespaces:
@@ -117,11 +117,11 @@ host_plant %<>% distinct(scientificName) %<>%
   arrange(scientificName)
 ```
 
-Add a column `relation` to `raw_data` and `host_plant` to indicate whether the species in `scientificName`is a parasite or a host:
+Add a column `resourceRelation` to `raw_data` and `host_plant` to indicate whether the species in `scientificName`is a parasite or a host:
 
 ```{r}
-raw_data %<>% mutate(relation = "parasite")
-host_plant %<>% mutate(relation = "host")
+raw_data %<>% mutate(resourceRelation = "parasite")
+host_plant %<>% mutate(resourceRelation = "host")
 ```
 
 Bind `raw_data` and `host_plant` by rows:
@@ -129,8 +129,6 @@ Bind `raw_data` and `host_plant` by rows:
 ```{r}
 raw_data %<>% bind_rows(host_plant)
 ```
-
-
 
 ## Generate taxonID
 
