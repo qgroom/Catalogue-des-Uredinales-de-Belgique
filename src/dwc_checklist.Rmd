@@ -159,6 +159,50 @@ Preview data:
 head(raw_data)
 ```
 
+## Add bibliographicCitation
+
+This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each rust fungus, a volume number (`raw_part`) and a page number (`raw_page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. We need to integrate these citations in both the Taxon Core and the Extensions. So, we add `bibliographicCitation` to `raw_data`. 
+
+The `bibliographicCitation` will contain the full reference with page number. First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
+
+```{r, echo = F}
+(full_reference <- as.data.frame(matrix(
+  c(1, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
+    2, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
+    3, "Vanderweyen, A., & Fraiture, A. (2012). Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
+  nrow = 3, 
+  ncol = 2, 
+  byrow = T,
+  dimnames = list (c(1:3), c("raw_part", "full_reference")))))
+
+```
+
+To join both data frames, `raw_part` in `full_reference` should be an integer:
+
+```{r}
+full_reference %<>% mutate(raw_part = as.integer(raw_part))
+```
+
+Join both data frames:
+
+```{r}
+raw_data <- left_join(raw_data, full_reference, by = "raw_part")
+```
+
+For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant. One host plant taxon can be infected by multiple rust fungi taxa and would thus contain multipele complete references.
+
+```{r}
+raw_data %<>% mutate(bibliographicCitation = case_when(
+  raw_resourceRelation == "parasite" ~  paste(full_reference, "Page:", raw_page),
+  raw_resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
+```
+
+Remove `full_reference`:
+
+```{r}
+raw_data %<>% select(-full_reference)
+```
+
 # Create Taxon core
 
 ## Pre-processing
@@ -250,47 +294,6 @@ taxon %<>% mutate(rightsHolder = "Botanical Garden Meise")
 
 ### bibliographicCitation
 
-This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each rust fungus, a volume number (`raw_part`) and a page number (`raw_page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. The `bibliographicCitation` will contain the full reference with page number. 
-
-First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
-
-```{r, echo = F}
-(full_reference <- as.data.frame(matrix(
-  c(1, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
-    2, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
-    3, "Vanderweyen, A., & Fraiture, A. (2012). Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
-  nrow = 3, 
-  ncol = 2, 
-  byrow = T,
-  dimnames = list (c(1:3), c("raw_part", "full_reference")))))
-
-```
-
-To join both data frames, `raw_part` in `full_reference` should be an integer:
-
-```{r}
-full_reference %<>% mutate(raw_part = as.integer(raw_part))
-```
-
-Join both data frames:
-
-```{r}
-taxon <- left_join(taxon, full_reference, by = "raw_part")
-```
-
-For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we only refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant. One host plant taxon can be infected by multiple rust fungi taxa and would thus contain multipele complete references.
-
-```{r}
-taxon %<>% mutate(bibliographicCitation = case_when(
-  raw_resourceRelation == "parasite" ~  paste(full_reference, "Page:", raw_page),
-  raw_resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
-```
-
-Remove `full_reference`:
-
-```{r}
-taxon %<>% select(-full_reference)
-```
 
 ### institutionID
 
