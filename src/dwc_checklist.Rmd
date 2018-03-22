@@ -324,43 +324,49 @@ taxon %<>% mutate(scientificName = raw_scientificName)
 ### kingdom
 
 ```{r}
-taxon %<>% mutate(kingdom = "Fungi")
+taxon %<>% mutate(kingdom = case_when(
+  raw_resourceRelation == "parasite" ~ "Fungi",
+  raw_resourceRelation == "host"     ~ "Plantae"))
 ```
 
 ### phylum
 
 ```{r}
-taxon %<>% mutate(phylum = "Basidiomycota")
+taxon %<>% mutate(phylum = case_when(
+  raw_resourceRelation == "parasite" ~ "Basidiomycota",
+  raw_resourceRelation == "host"     ~ ""))
 ```
 
 ### order
 
 ```{r}
-taxon %<>% mutate(order = "Uredinales")
+taxon %<>% mutate(order = case_when(
+  raw_resourceRelation == "parasite" ~ "Uredinales",
+  raw_resourceRelation == "host"     ~ ""))
 ```
 
 ### family
 
 ```{r}
-taxon %<>% mutate(family = raw_family)
+taxon %<>% mutate(family = raw_family) %<>% replace_na(replace = list(family = "")) #' Remove NA's for host species
 ```
 
 ### genus
 
 ```{r}
-taxon %<>% mutate(genus = pn_genusorabove)
+taxon %<>% mutate(genus = pn_genusorabove) %<>% replace_na(replace = list(genus = "")) #' Remove NA's for host species
 ```
 
 ### specificEpithet
 
 ```{r}
-taxon %<>% mutate(specificEpithet = pn_specificepithet)
+taxon %<>% mutate(specificEpithet = pn_specificepithet) %<>% replace_na(replace = list(specificEpithet = "")) #' Remove NA's for host species
 ```
 
 ### infraspecificEpithet
 
 ```{r}
-taxon %<>% mutate(infraspecificEpithet = pn_infraspecificepithet)
+taxon %<>% mutate(infraspecificEpithet = pn_infraspecificepithet) %<>% replace_na(replace = list(infraspecificEpithet = "")) #' Remove NA's for host species
 ```
 
 ### taxonRank
@@ -375,8 +381,12 @@ Generate `taxonRank`by recoding abbreviations:
 
 ```{r}
 taxon %<>% mutate(taxonRank = recode(pn_rankmarker,
-  "sp."  = "species",
-  "var." = "variety"))
+  "sp." = "species",
+  "var." = "variety",
+  "subsp." = "subspecies",
+  "fam." = "family",
+  "f." = "form",
+  .missing = ""))
 ```
 
 ### scientificNameAuthorship
