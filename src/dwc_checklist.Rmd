@@ -249,7 +249,7 @@ taxon %<>% mutate(rightsHolder = "Botanical Garden Meise")
 
 ### bibliographicCitation
 
-This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each species, a volume number (`raw_part`) and a page number (`raw_page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. The `bibliographicCitation` will contain the full reference with page number. 
+This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each rust fungus, a volume number (`raw_part`) and a page number (`raw_page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. The `bibliographicCitation` will contain the full reference with page number. 
 
 First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
 
@@ -277,10 +277,12 @@ Join both data frames:
 taxon <- left_join(taxon, full_reference, by = "raw_part")
 ```
 
-For the `bibliographicCitation` to be complete, we need to add the page information specified for each species:
+For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we only refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant. One host plant taxon can be infected by multiple rust fungi taxa and would thus contain multipele complete references.
 
 ```{r}
-taxon %<>% mutate(bibliographicCitation = paste(full_reference, "Page:", raw_page))
+taxon %<>% mutate(bibliographicCitation = case_when(
+  raw_resourceRelation == "parasite" ~  paste(full_reference, "Page:", raw_page),
+  raw_resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
 ```
 
 Remove `full_reference`:
