@@ -46,6 +46,7 @@ library(digest)    # Create hash function digests
 library(readr)     # To read a delimited file into a tibble
 library(rgbif)     # Interface to the GBIF API
 library(stringi)   # For fast and convenient string manipulation
+library(stringr)   # For fast and convenient string manipulation
 ```
 
 Set file paths (all paths should be relative to this script):
@@ -414,7 +415,7 @@ taxon %<>% mutate(nomenclaturalCode = "ICBN")
 Remove the original columns:
 
 ```{r}
-taxon %<>% select(-one_of(raw_colnames, pn_colnames))
+taxon %<>% select(-starts_with("raw_"), -starts_with("pn_"))
 ```
 
 Preview data:
@@ -433,8 +434,10 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
   
 ## Pre-processing
 
+The distribution applies to rust fungi only. We remove the host plants from `raw_data` and create `distribution`:
+
 ```{r}
-distribution <- raw_data
+distribution <- raw_data %>% filter(raw_resourceRelation == "parasite")
 ```
 
 ## Term mapping
@@ -489,7 +492,8 @@ distribution %>% distinct(raw_Column)
 
 ```{r}
 distribution %<>% mutate(establishmentMeans = recode(raw_Column,
-  "native" = "introduced"))
+  "native" = "introduced",
+  .missing = ""))
 ```
 
 ### eventDate
@@ -523,7 +527,6 @@ distribution %<>% mutate(month = recode(month,
     "XI"  = "11",
     "XII" = "12"))
 ```
-
 
 We remerge the year, month and day information for the date of first observation and express this in a ISO 8601 format. we need to add the leading zeros to months (using `sprintf`), we combine year, month and date information with "-" (using `paste`) and we strip the trailing "-NA" if day or month is "NA" (using `gsub`):
 
@@ -591,7 +594,7 @@ distribution %<>% mutate(end_date =
              sep = "-")))
 ```
 
-Compare the first records of `start_date` with `raw_from`:
+Compare the first records of `end_date` with `raw_from`:
 
 ```{r}
 distribution %>% select(raw_to, end_date) %>% head(n = 20)
@@ -616,3 +619,4 @@ distribution %<>% mutate(eventDate = gsub("([/][N][A]|([NA]{2}[/][NA]{2}))", "",
 ```
 
 ### source
+
