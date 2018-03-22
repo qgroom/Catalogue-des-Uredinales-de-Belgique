@@ -72,6 +72,66 @@ raw_data %<>%
   remove_empty_rows()     # Remove empty rows
 ```
 
+## Extract host plant information
+
+The checklist includes information about the rust fungi (`scientificName`) and their associated host plants (`hostPlant`). Although the publication of belgian rust fungi is our central focus here, it is also informative to include the host taxa in the taxon core. In the [Resource Relation Extension]() (see paragraph xxx), we elaborate further on the relation between the specific host and plant species.
+
+Before we start the mapping process, we need to extract the host plant information from `hostPlant` in `raw data` and we add them to the checklist as extra species under `scientificName`.
+
+Extract host plant information from `raw_data`:
+
+```{r}
+host_plant <- raw_data %>% select(hostPlant)
+```
+
+```{r, echo = FALSE}
+head(host_plant)
+```
+
+Split `hostPlant` on scientific name, using "," as a separator:
+
+```{r}
+host_plant %<>% separate(
+  hostPlant, 
+  sep = ", ", 
+  into = c(paste("species", c(1:20), sep = "_")),
+  fill = "right")
+```
+
+Gather all host species in one row (omitting "NA"):
+
+```{r}
+host_plant %<>% gather("species", "scientificName", starts_with("species"), na.rm = FALSE)
+```
+
+Remove leading whitespaces:
+
+```{r}
+host_plant %<>% mutate(scientificName = str_trim(scientificName))
+```
+
+Select unique scientificNames:
+
+```{r}
+host_plant %<>% distinct(scientificName) %<>% 
+  arrange(scientificName)
+```
+
+Add a column `relation` to `raw_data` and `host_plant` to indicate whether the species in `scientificName`is a parasite or a host:
+
+```{r}
+raw_data %<>% mutate(relation = "parasite")
+host_plant %<>% mutate(relation = "host")
+```
+
+Bind `raw_data` and `host_plant` by rows:
+
+```{r}
+raw_data %<>% bind_rows(host_plant)
+```
+
+
+
 ## Generate taxonID
 
 To uniquely identify a taxon in the Taxon Core and reference taxa in the Extensions, we need a `taxonID`. Since we need it in all generated files, we generate it here in the raw data frame. It is a combination of `dataset-shortname:taxon:` and a hash based on the scientific name. As long as the scientific name doesn't change, the ID will be stable: 
