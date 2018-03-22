@@ -192,7 +192,7 @@ raw_data <- left_join(raw_data, full_reference, by = "raw_part")
 For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant. One host plant taxon can be infected by multiple rust fungi taxa and would thus contain multipele complete references.
 
 ```{r}
-raw_data %<>% mutate(bibliographicCitation = case_when(
+raw_data %<>% mutate(raw_bibliographicCitation = case_when(
   raw_resourceRelation == "parasite" ~  paste(full_reference, "Page:", raw_page),
   raw_resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
 ```
@@ -293,6 +293,10 @@ taxon %<>% mutate(rightsHolder = "Botanical Garden Meise")
 ```
 
 ### bibliographicCitation
+
+```{r}
+taxon %<>% mutate(bibliographicCitation = raw_bibliographicCitation) 
+```
 
 
 ### institutionID
@@ -434,7 +438,9 @@ write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding
 ```
 
 # Create Distribution extension
-  
+
+Map the data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml).
+
 ## Pre-processing
 
 The distribution applies to rust fungi only. We remove the host plants from `raw_data` and create `distribution`:
@@ -622,4 +628,33 @@ distribution %<>% mutate(eventDate = gsub("([/][N][A]|([NA]{2}[/][NA]{2}))", "",
 ```
 
 ### source
+
+```{r}
+distribution %<>% mutate(source = raw_bibliographicCitation)
+```
+
+## Post-processing
+
+Remove the original columns:
+
+```{r}
+distribution %<>% select(-starts_with("raw_"), -start_date, -end_date)
+```
+
+Preview data:
+
+```{r}
+head(distribution)
+```
+
+Save to CSV:
+
+```{r}
+write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+```
+
+# Create Resource Relationship extension
+
+Map the data to [Resource Relationship](http://rs.gbif.org/extension/gbif/1.0/distribution.xml).
+
 
