@@ -180,19 +180,21 @@ Overview of the different compenents:
 head(parsed_names)
 ```
 
-Select the columns needed for further mapping in the Taxon Core, i.e. `genusorabove`, `specificepithet`, `authorship`, `bracketauthorship`, `rankmarker` and `infraspecificepithet` (these will be mapped to, respectively, `genus`, `specificEpithet`, `scientificNameAuthorship`, `scientificNameAuthorship`, `taxonRank` and `infraspecificEpithet`). We also select `scientificname` as we need this to merge `parsed_names` with `scientificName` in the Taxon Core.
+Select the columns needed for further mapping in the Taxon Core, i.e. `genusorabove`, `specificepithet`, `authorship`, `bracketauthorship`, `rankmarker` and `infraspecificepithet` (these will be mapped to, respectively, `genus`, `specificEpithet`, `scientificNameAuthorship`, `scientificNameAuthorship`, `taxonRank` and `infraspecificEpithet`). We also integrated `parsed`. If `parsed` = `FALSE`, than the scientificName could not by parsed by GBIF. We also select `scientificname` as we need this to merge `parsed_names` with `scientificName` in the Taxon Core. 
 
 ```{r}
-parsed_names %<>% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet)
+parsed_names %<>% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet, parsed)
 ```
 
-`infraspecificepithet`, `authorship` and `bracketauthorship` contain NA's. We replace this by blanks:
+Some columns contain NA's. We replace this by blanks:
 
 ```{r}
 parsed_names %<>% replace_na(list(
+  specificepithet      = "",   
   infraspecificepithet = "",
   authorship           = "",
-  bracketauthorship    = ""))
+  bracketauthorship    = "",
+  rankmarker           = ""))
 ```
 
 Similar as for the raw data file, we add the prefix `pn_` to the column names of `parsed_names`. This is because we merge `parsed_names` to the Taxon Core and remove these columns after mapping to Darwin Core terms. 
