@@ -75,14 +75,14 @@ raw_data %<>%
 
 ## Extract host plant information
 
-The checklist includes information about the rust fungi (`scientificName`) and their associated host plants (`hostPlant`). Although the publication of belgian rust fungi is our central focus here, it is also informative to include the host taxa in the taxon core. In the [Resource Relation Extension]() (see paragraph xxx), we elaborate further on the relation between the specific host and plant species.
+The checklist includes information about rust fungi (`scientificName`) and their associated host plants (`hostPlant`). Although the publication of belgian rust fungi is our central focus, it is also informative to include the host taxa in the taxon core. In the [Resource Relation Extension]() (see paragraph xxx), we elaborate further on the relation between the specific host and plant species.
 
 Before we start the mapping process, we need to extract the host plant information from `hostPlant` in `raw data` and we add them to the checklist as extra species under `scientificName`.
 
-Extract host plant information from `raw_data`:
+Extract host plant and rust fungi information from `raw_data` (we also include the rust fungi as an intermediate step, as we need the combined information later for the mapping of the Resource Relationship extension):
 
 ```{r}
-host_plant <- raw_data %>% select(hostPlant)
+host_plant <- raw_data %>% select(scientificName, hostPlant)
 ```
 
 ```{r, echo = FALSE}
@@ -102,20 +102,26 @@ host_plant %<>% separate(
 Gather all host species in one row (omitting "NA"):
 
 ```{r}
-host_plant %<>% gather("species", "scientificName", starts_with("species"), na.rm = TRUE)
+host_plant %<>% gather("interaction", "scientificName_host", starts_with("species"), na.rm = TRUE)
 ```
 
 Remove leading whitespaces:
 
 ```{r}
-host_plant %<>% mutate(scientificName = str_trim(scientificName))
+host_plant %<>% mutate(scientificName_host = str_trim(scientificName_host))
+```
+
+This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We save this dataframe as we will need this to construct the Resource Relationship extension (see xxx):
+
+```{r}
+interactions <- host_plant
 ```
 
 Select unique scientificNames:
 
 ```{r}
-host_plant %<>% distinct(scientificName) %<>% 
-  arrange(scientificName)
+host_plant %<>% distinct(scientificName_host) %<>% 
+  arrange(scientificName_host)
 ```
 
 Add a column `resourceRelation` to `raw_data` and `host_plant` to indicate whether the species in `scientificName`is a parasite or a host:
@@ -655,6 +661,14 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 
 # Create Resource Relationship extension
 
-Map the data to [Resource Relationship](http://rs.gbif.org/extension/gbif/1.0/distribution.xml).
+Map the data to [Resource Relationship](http://rs.gbif.org/extension/dwc/resource_relation_2018_01_18.xml).
+
+### resourceRelationshipID
+### resourceID
+### relatedResourceID
+### relationshipOfResource	
+### relationshipAccordingTo	
+### relationshipEstablishedDate	
+### relationshipRemarks
 
 
