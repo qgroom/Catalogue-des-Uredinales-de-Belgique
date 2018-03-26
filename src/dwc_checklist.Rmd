@@ -5,19 +5,16 @@ author:
 - Lien Reyserhove
 - Peter Desmet
 - Quentin Groom
-date:"`r Sys.Date()`"
+date: "`r Sys.Date()`"
 output:
   html_document:
     toc: true
     toc_depth: 3
     toc_float: true
     number_sections: true
-    theme: yeti
-    df_print: paged
-knit: (function(input_file, encoding) { rmarkdown::render(input_file, encoding = encoding, output_file = paste0("../docs/",sub(".Rmd", ".html", basename(input_file))))})
 ---
 
-This document describes how we map the checklist data to Darwin Core.
+This document describes how we map the checklist data to Darwin Core. The source file for this document can be found [here](https://github.com/trias-project/uredinales-belgium-checklist/blob/master/data/raw/checklist-of-rusts.tsv).
 
 # Setup
 
@@ -35,18 +32,14 @@ Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
 Load libraries:
 
 ```{r}
-library(tidyverse) # For data transformations
-
-# None core tidyverse packages:
+library(tidyverse) # To transform data
 library(magrittr)  # For %<>% pipes
-
-# Other packages
-library(janitor)   # For cleaning input data
+library(janitor)   # To clean input data
 library(digest)    # Create hash function digests
 library(readr)     # To read a delimited file into a tibble
 library(rgbif)     # Interface to the GBIF API
-library(stringi)   # For fast and convenient string manipulation
-library(stringr)   # For fast and convenient string manipulation
+library(stringi)   # To perform string operations
+library(stringr)   # To perform string operations
 ```
 
 Set file paths (all paths should be relative to this script):
@@ -58,28 +51,29 @@ raw_data_file = "../data/raw/checklist-of-rusts.tsv"
 # Processed files:
 dwc_taxon_file = "../data/processed/taxon.csv"
 dwc_distribution_file = "../data/processed/distribution.csv"
+dwc_relationship_file = "../data/processed/resourcerelationship.csv"
 ```
 
-# Read data
+# Read and pre-process raw data
 
 Create a data frame `raw_data` from the source data:
 
 ```{r}
 # Read the source data:
 raw_data <- read_delim(raw_data_file, delim = "\t") 
+```
 
-# Clean the data somewhat: remove empty rows if present
-raw_data %<>%
-  remove_empty_rows()     # Remove empty rows
+Clean the data somewhat: remove empty rows if present
+
+```{r}
+raw_data %<>% remove_empty_rows()     # Remove empty rows
 ```
 
 ## Extract host plant information
 
-The checklist includes information about rust fungi (`scientificName`) and their associated host plants (`hostPlant`). Although the publication of belgian rust fungi is our central focus, it is also informative to include the host taxa in the taxon core. In the [Resource Relation Extension]() (see paragraph xxx), we elaborate further on the relation between the specific host and plant species.
+The checklist includes information about rust fungi (`scientificName`) and their associated host plants (`hostPlant`). Although the publication of belgian rust fungi is our central focus, it is also informative to include the the host taxa in the taxon core. For this, we need to extract the host plant information from `hostPlant` in `raw data` and we add them to the checklist under `scientificName`.
 
-Before we start the mapping process, we need to extract the host plant information from `hostPlant` in `raw data` and we add them to the checklist as extra species under `scientificName`.
-
-Extract host plant and rust fungi information from `raw_data` (we also include the rust fungi as an intermediate step, as we need the combined information later for the mapping of the Resource Relationship extension):
+Extract the scientific names from _all_ species in `raw_data` (including the scientific names of the rust fungi as an intermediate step. We need this information later for the mapping of the Resource Relationship extension, see paragraph 5):
 
 ```{r}
 host_plant <- raw_data %>% select(scientificName, hostPlant)
@@ -111,7 +105,7 @@ Remove leading whitespaces:
 host_plant %<>% mutate(scientificName_host = str_trim(scientificName_host))
 ```
 
-This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We clean it and we save the information in a new dataframe `interactions`, as we will need this to construct the Resource Relationship extension (see xxx):
+This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We clean it and we save the information in a new dataframe `interactions`, as we will need this to construct the Resource Relationship extension (see paragraph 5):
 
 ```{r}
 interactions <- host_plant %<>% select(-interaction) %<>% 
@@ -156,16 +150,6 @@ vdigest <- Vectorize(digest)
 raw_data %<>% mutate(taxon_id = paste("uredinales-belgium-checklist", "taxon", vdigest(scientificName, algo="md5"), sep=":"))
 ```
 
-Create a data frame `raw_data` from the source data:
-
-```{r}
-# Add prefix `raw_` to all column names in `raw_data`:
-colnames(raw_data) <- paste0("raw_", colnames(raw_data))
-
-# Save those column names as a vector (makes it easier to remove them all later):
-raw_colnames <- colnames(raw_data)
-```
-
 Preview data:
 
 ```{r}
@@ -174,9 +158,9 @@ head(raw_data)
 
 ## Add bibliographicCitation
 
-This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each rust fungus, a volume number (`raw_part`) and a page number (`raw_page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. We need to integrate these citations in both the Taxon Core and the Extensions. So, we add `bibliographicCitation` to `raw_data`. 
+This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each rust fungus, a volume number (`part`) and a page number (`page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. We need to integrate these citations in both the taxon core and the extensions. So, we add `bibliographicCitation` to `raw_data`. 
 
-The `bibliographicCitation` will contain the full reference with page number. First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
+First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
 
 ```{r, echo = F}
 (full_reference <- as.data.frame(matrix(
@@ -186,28 +170,27 @@ The `bibliographicCitation` will contain the full reference with page number. Fi
   nrow = 3, 
   ncol = 2, 
   byrow = T,
-  dimnames = list (c(1:3), c("raw_part", "full_reference")))))
-
+  dimnames = list (c(1:3), c("part", "full_reference")))))
 ```
 
 To join both data frames, `raw_part` in `full_reference` should be an integer:
 
 ```{r}
-full_reference %<>% mutate(raw_part = as.integer(raw_part))
+full_reference %<>% mutate(part = as.integer(part))
 ```
 
 Join both data frames:
 
 ```{r}
-raw_data <- left_join(raw_data, full_reference, by = "raw_part")
+raw_data <- left_join(raw_data, full_reference, by = "part")
 ```
 
-For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant. One host plant taxon can be infected by multiple rust fungi taxa and would thus contain multipele complete references.
+For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant.
 
 ```{r}
-raw_data %<>% mutate(raw_bibliographicCitation = case_when(
-  raw_resourceRelation == "parasite" ~  paste(full_reference, "Page:", raw_page),
-  raw_resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
+raw_data %<>% mutate(bibliographicCitation = case_when(
+  resourceRelation == "parasite" ~  paste(full_reference, "Page:", page),
+  resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
 ```
 
 Remove `full_reference`:
@@ -216,17 +199,29 @@ Remove `full_reference`:
 raw_data %<>% select(-full_reference)
 ```
 
-# Create Taxon core
+## Further pre-processing:
 
-## Pre-processing
+Add prefix `raw_` to all column names in `raw_data` to avoid name clashes with Darwin Core terms:
 
 ```{r}
+colnames(raw_data) <- paste0("raw_", colnames(raw_data))
+```
+
+Preview data:
+
+```{r}
+raw_data %>% head()
+```
+
+# Create taxon core
+
+```{r start_taxon}
 taxon <- raw_data
 ```
 
-### generic names
+## generic names
 
-`raw_scientificName` includes information about the genus, specific epithet, infraspecific epithet, (bracket)authorship and taxonRank. The full scientific name will be mapped under `scientificName` in the Taxon Core. For enhanced readability, we parse `raw_scientificName` into its different components using the parsenames() function from [rgbif](https://cran.r-project.org/web/packages/rgbif/rgbif.pdf).
+`raw_scientificName` includes information about the genus, specific epithet, infraspecific epithet, (bracket)authorship and taxonRank. The full scientific name will be mapped under `scientificName` in the taxon core. For enhanced readability, we parse `raw_scientificName` into its different components using the parsenames() function from [rgbif](https://cran.r-project.org/web/packages/rgbif/rgbif.pdf).
 
 ```{r}
 parsed_names <- parsenames(taxon $ raw_scientificName)
@@ -238,13 +233,13 @@ Overview of the different compenents:
 head(parsed_names)
 ```
 
-Select the columns needed for further mapping in the Taxon Core, i.e. `genusorabove`, `specificepithet`, `authorship`, `bracketauthorship`, `rankmarker` and `infraspecificepithet` (these will be mapped to, respectively, `genus`, `specificEpithet`, `scientificNameAuthorship`, `scientificNameAuthorship`, `taxonRank` and `infraspecificEpithet`). We also integrated `parsed`. If `parsed` = `FALSE`, than the scientificName could not by parsed by GBIF. We also select `scientificname` as we need this to merge `parsed_names` with `scientificName` in the Taxon Core. 
+Select the columns needed for further mapping in the taxon core, i.e. `genusorabove`, `specificepithet`, `authorship`, `bracketauthorship`, `rankmarker` and `infraspecificepithet` (these will be mapped to, respectively, `genus`, `specificEpithet`, `scientificNameAuthorship`, `scientificNameAuthorship`, `taxonRank` and `infraspecificEpithet`). We also select `scientificname` as we need this to merge `parsed_names` with `scientificName` in the Taxon Core. 
 
 ```{r}
-parsed_names %<>% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet, parsed)
+parsed_names %<>% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet)
 ```
 
-Some columns contain NA's. We replace this by blanks:
+Some columns contain NA's. We replace these by blanks:
 
 ```{r}
 parsed_names %<>% replace_na(list(
@@ -255,13 +250,10 @@ parsed_names %<>% replace_na(list(
   rankmarker           = ""))
 ```
 
-Similar as for the raw data file, we add the prefix `pn_` to the column names of `parsed_names`. This is because we merge `parsed_names` to the Taxon Core and remove these columns after mapping to Darwin Core terms. 
+Add the prefix `pn_` to the column names of `parsed_names` (to remove these columns after the mapping process):
 
 ```{r}
 colnames(parsed_names) <- paste0("pn_", colnames(parsed_names))
-
-# Save those column names as a vector (makes it easier to remove them all later):
-pn_colnames <- colnames(parsed_names)
 ```
 
 Amount of species in the Taxon Core before merge:
@@ -276,7 +268,7 @@ Merge `parsed_names` with the Taxon Core:
 taxon <- inner_join(taxon, parsed_names, by = c("raw_scientificName" = "pn_scientificname"))
 ```
 
-Is the amount of species in the Taxon Core the same as before the merge?
+Is the amount of species in the Taxon Core the same as before the merge (should be TRUE)?
 
 ```{r, echo = F}
 before_merge == nrow(taxon)
@@ -310,7 +302,6 @@ taxon %<>% mutate(rightsHolder = "Botanical Garden Meise")
 ```{r}
 taxon %<>% mutate(bibliographicCitation = raw_bibliographicCitation) 
 ```
-
 
 ### institutionID
 
@@ -414,7 +405,7 @@ taxon %<>% mutate(taxonRank = recode(pn_rankmarker,
 
 The format specifications for `scientificNameAuthorship` is given [here](http://rs.tdwg.org/dwc/terms/history/index.htm#scientificNameAuthorship-2009-04-24).The mapping is as follows:
 * no (bracket)authorship provided: `scientificNameAuthorship` is left blank.
-* only authorship is provided, no information on bracketauthorship: we copy values in `pn_authorship`..
+* only authorship is provided, no information on bracketauthorship: we copy values in `pn_authorship`.
 * both authorship and bracketauthorship is provided: the required format here is (bracketauthorship) authorship.
 
 ```{r}
@@ -573,7 +564,6 @@ remove `day`, `month` and `year`:
 distribution %<>% select(-day, -month, -year)
 ```
 
-
 The information for the date of the last observation is contained in `raw_to`.
 The same principles and steps can be repeated for the mapping of `raw_to` into `end_date`
 
@@ -668,13 +658,15 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 
 # Create Resource Relationship extension
 
-Map the data to [Resource Relationship](http://rs.gbif.org/extension/dwc/resource_relation_2018_01_18.xml).
-
-```{r}
+```{r start_resource_relationship}
 resource_relationship <- raw_data
 ```
 
-In this extension, we map all interactions between the rust fungi and host plants, with one line representing a one-to-one taxon interaction. These interactions are saved in `interactions`. We add the one-to-one taxon interactions to `resource_relationship`: 
+## Term mapping
+
+Map the data to [Resource Relationship](http://rs.gbif.org/extension/dwc/resource_relation_2018_01_18.xml).
+
+In this extension, we map all interactions between the rust fungi and host plants, with one line representing a one-to-one taxon interaction. These interactions are saved in `interactions`. We add this one-to-one taxon interactions to `resource_relationship`: 
 
 ```{r}
 resource_relationship %<>% right_join(interactions, by = c("raw_scientificName" = "scientificName_parasite"))
@@ -706,7 +698,7 @@ resource_relationship %<>% rename("resourceID" = "raw_taxon_id.y")
 This Darwin Core term refers to the taxonID of the _subject_ of the relationship. This is the taxonID of the rust fungi.
 
 ```{r}
-
+resource_relationship %<>% mutate(relatedResourceID = raw_taxon_id.x)  
 ```
 
 ### relationshipOfResource	
@@ -726,7 +718,7 @@ resource_relationship %<>% mutate(relationshipAccordingTo = raw_bibliographicCit
 Remove the original columns:
 
 ```{r}
-resource_relationship %<>% select(-scientificName_parasite, -scientificName_host, -raw_bibliographicCitation)
+resource_relationship %<>% select(-starts_with("raw_"), -scientificName_host)
 ```
 
 Preview data:
