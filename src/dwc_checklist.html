@@ -617,9 +617,9 @@ raw_data %&lt;&gt;% mutate(taxon_id = paste(&quot;uredinales-belgium-checklist&q
 ## 1       &lt;NA&gt;
 ## 2      alien
 ## 3     native</code></pre>
-<p><code>native</code> is not part of the <a href="http://rs.gbif.org/vocabulary/gbif/establishment_means.xml">establishmentMeans vocabulary</a>. Here, we use <code>introduced</code>:</p>
+<p><code>alien</code> is not part of the <a href="http://rs.gbif.org/vocabulary/gbif/establishment_means.xml">establishmentMeans vocabulary</a>. Here, we use <code>introduced</code>:</p>
 <pre class="r"><code>distribution %&lt;&gt;% mutate(establishmentMeans = recode(raw_Column,
-  &quot;native&quot; = &quot;introduced&quot;,
+  &quot;alien&quot; = &quot;introduced&quot;,
   .missing = &quot;&quot;))</code></pre>
 </div>
 <div id="eventdate" class="section level3">

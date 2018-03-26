@@ -501,11 +501,11 @@ establishmentMeans information is contained in `raw_Column`:
 distribution %>% distinct(raw_Column)
 ```
 
-`native` is not part of the [establishmentMeans vocabulary](http://rs.gbif.org/vocabulary/gbif/establishment_means.xml). Here, we use `introduced`:
+`alien` is not part of the [establishmentMeans vocabulary](http://rs.gbif.org/vocabulary/gbif/establishment_means.xml). Here, we use `introduced`:
 
 ```{r}
 distribution %<>% mutate(establishmentMeans = recode(raw_Column,
-  "native" = "introduced",
+  "alien" = "introduced",
   .missing = ""))
 ```
 
