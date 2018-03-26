@@ -111,10 +111,11 @@ Remove leading whitespaces:
 host_plant %<>% mutate(scientificName_host = str_trim(scientificName_host))
 ```
 
-This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We save this dataframe as we will need this to construct the Resource Relationship extension (see xxx):
+This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We clean it and we save the information in a new dataframe `interactions`, as we will need this to construct the Resource Relationship extension (see xxx):
 
 ```{r}
-interactions <- host_plant
+interactions <- host_plant %<>% select(-interaction) %<>% 
+                                         rename("scientificName_parasite" = "scientificName")
 ```
 
 Select unique scientificNames:
@@ -122,6 +123,12 @@ Select unique scientificNames:
 ```{r}
 host_plant %<>% distinct(scientificName_host) %<>% 
   arrange(scientificName_host)
+```
+
+Rename `scientificName_host` to enable binding by rows:
+
+```{r}
+host_plant %<>% rename(scientificName = scientificName_host)
 ```
 
 Add a column `resourceRelation` to `raw_data` and `host_plant` to indicate whether the species in `scientificName`is a parasite or a host:
