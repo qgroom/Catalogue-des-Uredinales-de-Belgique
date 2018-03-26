@@ -663,12 +663,76 @@ write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE
 
 Map the data to [Resource Relationship](http://rs.gbif.org/extension/dwc/resource_relation_2018_01_18.xml).
 
-### resourceRelationshipID
+```{r}
+resource_relationship <- raw_data
+```
+
+In this extension, we map all interactions between the rust fungi and host plants, with one line representing a one-to-one taxon interaction. These interactions are saved in `interactions`. We add the one-to-one taxon interactions to `resource_relationship`: 
+
+```{r}
+resource_relationship %<>% right_join(interactions, by = c("raw_scientificName" = "scientificName_parasite"))
+```
+
 ### resourceID
+
+This Darwin Core term refers to the taxonID of the _object_ of the relationship. This is the taxonID of the host plants. By joining `resource_relationship` with `interactions` on the the scientificName of the parasite, the taxonID's of the host plants were removed from the `resource_relationship`. We need to extract them from `raw_data`:
+
+```{r}
+taxonID_host <- raw_data %>% filter(raw_resourceRelation == "host") %>% 
+  select(raw_scientificName, raw_taxon_id)
+```
+
+Join `resource_relationship` with `taxonID_host`:
+
+```{r}
+resource_relationship %<>% left_join(taxonID_host, by = c("scientificName_host" = "raw_scientificName"))
+```
+
+Rename `raw_taxon_id.y`:
+
+```{r}
+resource_relationship %<>% rename("resourceID" = "raw_taxon_id.y")
+```
+
 ### relatedResourceID
+
+This Darwin Core term refers to the taxonID of the _subject_ of the relationship. This is the taxonID of the rust fungi.
+
+```{r}
+
+```
+
 ### relationshipOfResource	
+
+```{r}
+resource_relationship %<>% mutate(relationshipOfResource = "parasite_of")
+```
+
 ### relationshipAccordingTo	
-### relationshipEstablishedDate	
-### relationshipRemarks
+
+```{r}
+resource_relationship %<>% mutate(relationshipAccordingTo = raw_bibliographicCitation)
+```
+
+## Post-processing:
+
+Remove the original columns:
+
+```{r}
+resource_relationship %<>% select(-scientificName_parasite, -scientificName_host, -raw_bibliographicCitation)
+```
+
+Preview data:
+
+```{r}
+head(resource_relationship)
+```
+
+Save to CSV:
+
+```{r}
+write.csv(resource_relationship, file = dwc_relationship_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+```
+
 
 
