@@ -23,11 +23,6 @@ The Catalogue of the Rust Fungi of Belgium is a compilation of the published vol
 
 ## Repo structure
 
-The repository structure is based on [Cookiecutter Data Science](http://drivendata.github.io/cookiecutter-data-science/). Files and directories indicated with `GENERATED` should not be edited manually.
-
-
-## Repo structure
-
 The repository structure is based on [Cookiecutter Data Science](http://drivendata.github.io/cookiecutter-data-science/). Files indicated with `GENERATED` should not be edited manually.
 
 ```
