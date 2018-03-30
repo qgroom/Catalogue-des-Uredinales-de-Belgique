@@ -18,8 +18,8 @@ The Catalogue of the Rust Fungi of Belgium is a compilation of the published vol
 
 ## Published dataset
 
-* Dataset on the IPT(planned)
-* Dataset on GBIF(planned)
+* Dataset on the IPT (planned)
+* Dataset on GBIF (planned)
 
 ## Repo structure
 
