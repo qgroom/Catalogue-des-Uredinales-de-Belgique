@@ -7,9 +7,9 @@ This repository contains the functionality to standardize the _Catalogue of the 
 
 The Catalogue of the Rust Fungi of Belgium is a compilation of the published volumes of the "Catalogue des Uredinales de Belgique":
 
-* Vanderweyen, A, & Fraiture, A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique
-* Vanderweyen, A, & Fraiture, A (2009) Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.
-* Vanderweyen, A, & Fraiture, A (2012) Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique.
+* Vanderweyen, A & Fraiture, A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique
+* Vanderweyen, A & Fraiture, A (2009) Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.
+* Vanderweyen, A & Fraiture, A (2012) Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique.
 
 ## Workflow
 
