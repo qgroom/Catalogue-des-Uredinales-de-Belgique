@@ -43,8 +43,6 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 
 ## Installation
 
-### Run or adapt the code
-
 1. Clone or fork the repository.
 2. Open the RStudio project file.
 3. Open the R markdown file `dwc_mapping.Rmd` in Rstudio. For more information on R markdown, click [here](https://rmarkdown.rstudio.com/)
