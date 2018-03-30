@@ -55,4 +55,4 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 
 ## License
 
-[MIT License](LICENSE)
+[MIT License](https://github.com/trias-project/uredinales-belgium-checklist/blob/update-README/LICENSE)
