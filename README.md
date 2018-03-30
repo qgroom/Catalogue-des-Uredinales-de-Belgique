@@ -38,7 +38,6 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 │
 └── src
     ├── dwc_mapping.Rmd  : Darwin Core mapping script, core functionality of this repository
-    ├── dwc_mapping.html :  
     └── src.Rproj        : RStudio project file
 ```
 
