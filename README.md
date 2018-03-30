@@ -46,7 +46,7 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 
 1. Clone or fork the [repository](https://github.com/trias-project/uredinales-belgium-checklist)
 2. Open the RStudio project file: [src.Rproj](src/src.Rproj)
-3. Open the R markdown file "dwc_mapping.Rmd" in Rstudio. For more information on R markdown, click [here](https://rmarkdown.rstudio.com/)
+3. Open the R markdown file `dwc_mapping.Rmd` in Rstudio. For more information on R markdown, click [here](https://rmarkdown.rstudio.com/)
 4. Install [any required packages](src/dwc_mapping.Rmd#setup)
 5. Run the code by selecting "Run All" in the "Run" menu or by using "Ctrl + Alt + R". This will generate the [processed data files](data/processed) staring from the [raw data file](data/raw)
 6. To generate the Markdown html file, push the "Knit" button, option "Knit to HTML"
