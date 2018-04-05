@@ -7,7 +7,7 @@ This repository contains the functionality to standardize the _Catalogue of the 
 
 The Catalogue of the Rust Fungi of Belgium is a compilation of the published volumes of the "Catalogue des Uredinales de Belgique":
 
-* Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique
+* Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.
 * Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.
 * Vanderweyen A & Fraiture A (2012) Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique.
 
@@ -23,11 +23,11 @@ The Catalogue of the Rust Fungi of Belgium is a compilation of the published vol
 
 ## Repo structure
 
-The repository structure is based on [Cookiecutter Data Science](http://drivendata.github.io/cookiecutter-data-science/). Files indicated with `GENERATED` should not be edited manually.
+The repository structure is based on [Cookiecutter Data Science](http://drivendata.github.io/cookiecutter-data-science/). Files and directories indicated with `GENERATED` should not be edited manually.
 
 ```
-├── README.md         : Top-level description of the project and how to run it
-├── LICENSE           : Project license
+├── README.md         : Description of this repository
+├── LICENSE           : Repository license
 ├── .gitignore        : Files and folders to be ignored by git
 │
 ├── data
@@ -43,11 +43,12 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 
 ## Installation
 
-1. Clone or fork the repository.
-2. Open the RStudio project file.
-3. Open the R markdown file `dwc_mapping.Rmd` in Rstudio. For more information on R markdown, click [here](https://rmarkdown.rstudio.com/)
+1. Clone this repository to your computer
+2. Open the RStudio project file
+3. Open the `dwc_mapping.Rmd` [R Markdown file](https://rmarkdown.rstudio.com/) in RStudio
 4. Install any required packages
-5. Run the code by selecting "Run All" in the "Run" menu or by using "Ctrl + Alt + R". This will generate the processed data files starting from the raw data file
+5. Click `Run > Run All` to generate the processed data
+6. Alternatively, click `Build > Build website` to generated the processed data and build the website in `/docs`
 
 ## Contributors
 
