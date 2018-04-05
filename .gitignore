@@ -35,3 +35,6 @@ vignettes/*.pdf
 # Draft files
 draft.*
 .Rproj.user
+
+# Mac OS X
+.DS_Store

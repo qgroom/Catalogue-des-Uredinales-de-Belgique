@@ -1,7 +1,7 @@
 ---
 title: "Darwin Core mapping"
-subtitle: "For dataset: Checklist of the rust fungi of Belgium"
-author: 
+subtitle: "For: The Catalogue of the Rust Fungi of Belgium"
+author:
 - Lien Reyserhove
 - Peter Desmet
 - Quentin Groom
