@@ -1,0 +1,16 @@
+name: "The Catalogue of the Rust Fungi of Belgium"
+output_dir: "../docs"
+include: ["static/"]
+navbar:
+  title: "uredinales-belgium-checklist"
+  left:
+    - text: "Darwin Core mapping"
+      href: dwc_checklist.html
+  right:
+    - icon: fa-github fa-lg
+      href: https://github.com/trias-project/uredinales-belgium-checklist
+output:
+  html_document:
+    theme: yeti
+    df_print: paged
+    css: "static/css/trias.css"
