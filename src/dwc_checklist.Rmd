@@ -318,7 +318,7 @@ taxon %<>% mutate(datasetID = "")
 ### datasetName
 
 ```{r}
-taxon %<>% mutate(datasetName = "Checklist of the Rust Fungi of Belgium")
+taxon %<>% mutate(datasetName = "Catalogue of the Rust Fungi of Belgium")
 ```
 
 ### taxonID
