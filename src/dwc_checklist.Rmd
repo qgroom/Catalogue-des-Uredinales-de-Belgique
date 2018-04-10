@@ -720,6 +720,14 @@ This Darwin Core term refers to the taxonID of the _subject_ of the relationship
 resource_relationship %<>% mutate(relatedResourceID = raw_taxon_id.x)  
 ```
 
+### taxonID
+
+The `taxonID` refers to the `resourceID`, which is the `taxonID` of the host plants:
+
+```{r}
+resource_relationship %<>% mutate(taxonID = resourceID) 
+```
+
 ### relationshipOfResource	
 
 ```{r}
