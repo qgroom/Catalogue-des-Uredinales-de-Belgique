@@ -632,10 +632,15 @@ remove `day`, `month` and `year`:
 distribution %<>% select(-day, -month, -year)
 ```
 
-Merge `start_date` and `end_date` in `eventDate`:
+Merge `start_date` and `end_date` in `eventDate` (ISO 8601). 
+When only one date is provided (`start_date` OR `end_date`), we copy the date for both `start_date` and `end_date`. This to emphasize that a taxon was detected **exclusively** at that particular time point:
 
 ```{r}
-distribution %<>% mutate(eventDate = paste(start_date, end_date, sep = "/"))
+distribution %<>% mutate(eventDate = case_when(
+  start_date == "NA" & end_date == "NA" ~ "",
+  start_date == "NA" & end_date != "NA" ~ paste(end_date, end_date, sep = "/"),
+  start_date != "NA" & end_date == "NA" ~ paste(start_date, start_date, sep = "/"),
+  TRUE ~ paste(start_date, end_date, sep = "/")))
 ```
 
 Remove "/NA" or "NA/NA":
