@@ -164,9 +164,9 @@ First, we complement the volume number with the full reference (given in the met
 
 ```{r, echo = F}
 (full_reference <- as.data.frame(matrix(
-  c(1, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
-    2, "Vanderweyen, A., & Fraiture, A. (2009). Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
-    3, "Vanderweyen, A., & Fraiture, A. (2012). Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
+  c(1, "Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
+    2, "Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
+    3, "Vanderweyen A & Fraiture A (2012) Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
   nrow = 3, 
   ncol = 2, 
   byrow = T,
@@ -190,7 +190,7 @@ For each rust fungus taxon, the `bibliographicCitation` will contain the full re
 ```{r}
 raw_data %<>% mutate(bibliographicCitation = case_when(
   resourceRelation == "parasite" ~  paste(full_reference, "Page:", page),
-  resourceRelation == "host"     ~ "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique"))
+  resourceRelation == "host"     ~ "Vanderweyen A & Fraiture A (2009 & 2012) Catalogue des Uredinales de Belgique. Lejeunia, Revue de Botanique."))
 ```
 
 Remove `full_reference`:
