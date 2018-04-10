@@ -704,7 +704,7 @@ resource_relationship %<>% mutate(relatedResourceID = raw_taxon_id.x)
 ### relationshipOfResource	
 
 ```{r}
-resource_relationship %<>% mutate(relationshipOfResource = "parasite_of")
+resource_relationship %<>% mutate(relationshipOfResource = "parasite of")
 ```
 
 ### relationshipAccordingTo	
