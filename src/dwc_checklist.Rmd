@@ -239,6 +239,22 @@ Select the columns needed for further mapping in the taxon core, i.e. `genusorab
 parsed_names %<>% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet)
 ```
 
+The parsenames() function from rgbif does not identify all taxonomic ranks. We need to manually add all taxonomic ranks for which the rankmarker was left empty:
+
+```{r}
+parsed_names %>% select(scientificname, rankmarker) %>% 
+  filter(is.na(rankmarker)) 
+```
+
+Almost all these taxa are genera, only one taxon (`Salix fragilis x Salix pendandra`) is a hybrid. We manually add these taxonomic ranks to `parsed_names`:
+
+```{r}
+parsed_names %<>% mutate(rankmarker = case_when(
+  is.na(rankmarker) & scientificname != "Salix fragilis x Salix pentandra" ~ "genus",
+  scientificname == "Salix fragilis x Salix pentandra" ~ "hybrid",
+  TRUE ~ rankmarker))
+```
+
 Some columns contain NA's. We replace these by blanks:
 
 ```{r}
@@ -246,8 +262,7 @@ parsed_names %<>% replace_na(list(
   specificepithet      = "",   
   infraspecificepithet = "",
   authorship           = "",
-  bracketauthorship    = "",
-  rankmarker           = ""))
+  bracketauthorship    = ""))
 ```
 
 Add the prefix `pn_` to the column names of `parsed_names` (to remove these columns after the mapping process):
@@ -397,8 +412,7 @@ taxon %<>% mutate(taxonRank = recode(pn_rankmarker,
   "var." = "variety",
   "subsp." = "subspecies",
   "fam." = "family",
-  "f." = "form",
-  .missing = ""))
+  "f." = "form"))
 ```
 
 ### scientificNameAuthorship
