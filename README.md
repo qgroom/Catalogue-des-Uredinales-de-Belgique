@@ -1,4 +1,4 @@
-# The Catalogue of the Rust Fungi of Belgium
+# Catalogue of the Rust Fungi of Belgium
 
 
 ## Rationale
