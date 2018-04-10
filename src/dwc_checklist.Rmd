@@ -495,16 +495,16 @@ distribution %<>% mutate(occurrenceStatus = raw_occurrenceStatus)
 
 ### establishmentMeans
 
-establishmentMeans information is contained in `raw_Column`:
+establishmentMeans information is contained in `raw_establishmentMeans`:
 
 ```{r}
-distribution %>% distinct(raw_Column)
+distribution %>% distinct(raw_establishmentMeans)
 ```
 
 `alien` is not part of the [establishmentMeans vocabulary](http://rs.gbif.org/vocabulary/gbif/establishment_means.xml). Here, we use `introduced`:
 
 ```{r}
-distribution %<>% mutate(establishmentMeans = recode(raw_Column,
+distribution %<>% mutate(establishmentMeans = recode(raw_establishmentMeans,
   "alien" = "introduced",
   .missing = ""))
 ```
