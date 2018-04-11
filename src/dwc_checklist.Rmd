@@ -1,6 +1,6 @@
 ---
 title: "Darwin Core mapping"
-subtitle: "For: The Catalogue of the Rust Fungi of Belgium"
+subtitle: "For: Catalogue of the Rust Fungi of Belgium"
 author:
 - Lien Reyserhove
 - Peter Desmet
@@ -14,7 +14,7 @@ output:
     number_sections: true
 ---
 
-This document describes how we map the checklist data to Darwin Core. The source file for this document can be found [here](https://github.com/trias-project/uredinales-belgium-checklist/blob/master/data/raw/checklist-of-rusts.tsv).
+This document describes how we map the checklist data to Darwin Core. The source file for this document can be found [here](https://github.com/trias-project/uredinales-belgium-checklist/blob/master/src/dwc_checklist.Rmd).
 
 # Setup
 
@@ -24,7 +24,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 Set locale (so we use UTF-8 character encoding):
 
-```{r, eval = F}
+```{r}
 # This works on Mac OS X, might not work on other OS
 Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
 ```
@@ -455,7 +455,7 @@ Save to CSV:
 write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
 ```
 
-# Create Distribution extension
+# Create distribution extension
 
 Map the data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml).
 
@@ -675,7 +675,7 @@ Save to CSV:
 write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
 ```
 
-# Create Resource Relationship extension
+# Create resource relationship extension
 
 ```{r start_resource_relationship}
 resource_relationship <- raw_data
@@ -765,6 +765,3 @@ Save to CSV:
 ```{r}
 write.csv(resource_relationship, file = dwc_relationship_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
 ```
-
-
-
