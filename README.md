@@ -1,4 +1,4 @@
-# The Catalogue of the Rust Fungi of Belgium
+# Catalogue of the Rust Fungi of Belgium
 
 
 ## Rationale
@@ -30,7 +30,7 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 ```
 ├── README.md         : Description of this repository
 ├── LICENSE           : Repository license
-├── .gitignore        : Files and folders to be ignored by git
+├── .gitignore        : Files and directories to be ignored by git
 │
 ├── data
 │   ├── raw           : Source data, input for mapping script
@@ -39,8 +39,8 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 ├── docs              : Repository website GENERATED
 │
 └── src
-    ├── dwc_mapping.Rmd  : Darwin Core mapping script, core functionality of this repository
-    └── src.Rproj        : RStudio project file
+    ├── dwc_mapping.Rmd : Darwin Core mapping script, core functionality of this repository
+    └── src.Rproj       : RStudio project file
 ```
 
 ## Installation

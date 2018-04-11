@@ -1,6 +1,6 @@
 ---
 title: "Darwin Core mapping"
-subtitle: "For: The Catalogue of the Rust Fungi of Belgium"
+subtitle: "For: Catalogue of the Rust Fungi of Belgium"
 author:
 - Lien Reyserhove
 - Peter Desmet
@@ -14,10 +14,754 @@ output:
     number_sections: true
 ---
 
+This document describes how we map the checklist data to Darwin Core. The source file for this document can be found [here](https://github.com/trias-project/uredinales-belgium-checklist/blob/master/src/dwc_checklist.Rmd).
+
 # Setup
 
 ```{r, echo = FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
+Set locale (so we use UTF-8 character encoding):
 
+```{r}
+# This works on Mac OS X, might not work on other OS
+Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
+```
+
+Load libraries:
+
+```{r}
+library(tidyverse) # To transform data
+library(magrittr)  # For %<>% pipes
+library(janitor)   # To clean input data
+library(digest)    # Create hash function digests
+library(readr)     # To read a delimited file into a tibble
+library(rgbif)     # Interface to the GBIF API
+library(stringi)   # To perform string operations
+library(stringr)   # To perform string operations
+```
+
+Set file paths (all paths should be relative to this script):
+ 
+```{r}
+# Raw files:
+raw_data_file = "../data/raw/checklist-of-rusts.tsv"
+
+# Processed files:
+dwc_taxon_file = "../data/processed/taxon.csv"
+dwc_distribution_file = "../data/processed/distribution.csv"
+dwc_relationship_file = "../data/processed/resourcerelationship.csv"
+```
+
+# Read and pre-process raw data
+
+Create a data frame `raw_data` from the source data:
+
+```{r}
+# Read the source data:
+raw_data <- read_delim(raw_data_file, delim = "\t") 
+```
+
+Clean the data somewhat: remove empty rows if present
+
+```{r}
+raw_data %<>% remove_empty_rows()     # Remove empty rows
+```
+
+## Extract host plant information
+
+The checklist includes information about rust fungi (`scientificName`) and their associated host plants (`hostPlant`). Although the publication of belgian rust fungi is our central focus, it is also informative to include the the host taxa in the taxon core. For this, we need to extract the host plant information from `hostPlant` in `raw data` and we add them to the checklist under `scientificName`.
+
+Extract the scientific names from _all_ species in `raw_data` (including the scientific names of the rust fungi as an intermediate step. We need this information later for the mapping of the Resource Relationship extension, see paragraph 5):
+
+```{r}
+host_plant <- raw_data %>% select(scientificName, hostPlant)
+```
+
+```{r, echo = FALSE}
+head(host_plant)
+```
+
+Split `hostPlant` on scientific name, using "," as a separator:
+
+```{r}
+host_plant %<>% separate(
+  hostPlant, 
+  sep = ", ", 
+  into = c(paste("species", c(1:20), sep = "_")),
+  fill = "right")
+```
+
+Gather all host species in one row (omitting "NA"):
+
+```{r}
+host_plant %<>% gather("interaction", "scientificName_host", starts_with("species"), na.rm = TRUE)
+```
+
+Remove leading whitespaces:
+
+```{r}
+host_plant %<>% mutate(scientificName_host = str_trim(scientificName_host))
+```
+
+This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We clean it and we save the information in a new dataframe `interactions`, as we will need this to construct the Resource Relationship extension (see paragraph 5):
+
+```{r}
+interactions <- host_plant %<>% select(-interaction) %<>% 
+                                         rename("scientificName_parasite" = "scientificName")
+```
+
+Select unique scientificNames:
+
+```{r}
+host_plant %<>% distinct(scientificName_host) %<>% 
+  arrange(scientificName_host)
+```
+
+Rename `scientificName_host` to enable binding by rows:
+
+```{r}
+host_plant %<>% rename(scientificName = scientificName_host)
+```
+
+Add a column `resourceRelation` to `raw_data` and `host_plant` to indicate whether the species in `scientificName`is a parasite or a host:
+
+```{r}
+raw_data %<>% mutate(resourceRelation = "parasite")
+host_plant %<>% mutate(resourceRelation = "host")
+```
+
+Bind `raw_data` and `host_plant` by rows:
+
+```{r}
+raw_data %<>% bind_rows(host_plant)
+```
+
+## Generate taxonID
+
+To uniquely identify a taxon in the Taxon Core and reference taxa in the Extensions, we need a `taxonID`. Since we need it in all generated files, we generate it here in the raw data frame. It is a combination of `dataset-shortname:taxon:` and a hash based on the scientific name. As long as the scientific name doesn't change, the ID will be stable: 
+
+```{r}
+# Vectorize the digest function (The digest() function isn't vectorized. So if you pass in a vector, you get one value for the whole vector rather than a digest for each element of the vector):
+vdigest <- Vectorize(digest)
+
+# Generate taxonID:
+raw_data %<>% mutate(taxon_id = paste("uredinales-belgium-checklist", "taxon", vdigest(scientificName, algo="md5"), sep=":"))
+```
+
+Preview data:
+
+```{r}
+head(raw_data)
+```
+
+## Add bibliographicCitation
+
+This checklist is a compilation of three published volumes of the `Catalogue des Uredinales de Belgique (The rust fungi of Belgium)`. For each rust fungus, a volume number (`part`) and a page number (`page`) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. We need to integrate these citations in both the taxon core and the extensions. So, we add `bibliographicCitation` to `raw_data`. 
+
+First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame `full_reference`:
+
+```{r, echo = F}
+(full_reference <- as.data.frame(matrix(
+  c(1, "Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.",
+    2, "Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.",
+    3, "Vanderweyen A & Fraiture A (2012) Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique."), 
+  nrow = 3, 
+  ncol = 2, 
+  byrow = T,
+  dimnames = list (c(1:3), c("part", "full_reference")))))
+```
+
+To join both data frames, `raw_part` in `full_reference` should be an integer:
+
+```{r}
+full_reference %<>% mutate(part = as.integer(part))
+```
+
+Join both data frames:
+
+```{r}
+raw_data <- left_join(raw_data, full_reference, by = "part")
+```
+
+For each rust fungus taxon, the `bibliographicCitation` will contain the full reference with page number. For all host species, we refer to "Vanderweyen, A., & Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique" (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant.
+
+```{r}
+raw_data %<>% mutate(bibliographicCitation = case_when(
+  resourceRelation == "parasite" ~  paste(full_reference, "Page:", page),
+  resourceRelation == "host"     ~ "Vanderweyen A & Fraiture A (2009 & 2012) Catalogue des Uredinales de Belgique. Lejeunia, Revue de Botanique."))
+```
+
+Remove `full_reference`:
+
+```{r}
+raw_data %<>% select(-full_reference)
+```
+
+## Further pre-processing:
+
+Add prefix `raw_` to all column names in `raw_data` to avoid name clashes with Darwin Core terms:
+
+```{r}
+colnames(raw_data) <- paste0("raw_", colnames(raw_data))
+```
+
+Preview data:
+
+```{r}
+raw_data %>% head()
+```
+
+# Create taxon core
+
+```{r start_taxon}
+taxon <- raw_data
+```
+
+## generic names
+
+`raw_scientificName` includes information about the genus, specific epithet, infraspecific epithet, (bracket)authorship and taxonRank. The full scientific name will be mapped under `scientificName` in the taxon core. For enhanced readability, we parse `raw_scientificName` into its different components using the parsenames() function from [rgbif](https://cran.r-project.org/web/packages/rgbif/rgbif.pdf).
+
+```{r}
+parsed_names <- parsenames(taxon $ raw_scientificName)
+```
+
+Overview of the different compenents:
+
+```{r}
+head(parsed_names)
+```
+
+Select the columns needed for further mapping in the taxon core, i.e. `genusorabove`, `specificepithet`, `authorship`, `bracketauthorship`, `rankmarker` and `infraspecificepithet` (these will be mapped to, respectively, `genus`, `specificEpithet`, `scientificNameAuthorship`, `scientificNameAuthorship`, `taxonRank` and `infraspecificEpithet`). We also select `scientificname` as we need this to merge `parsed_names` with `scientificName` in the Taxon Core. 
+
+```{r}
+parsed_names %<>% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet)
+```
+
+The parsenames() function from rgbif does not identify all taxonomic ranks. We need to manually add all taxonomic ranks for which the rankmarker was left empty:
+
+```{r}
+parsed_names %>% select(scientificname, rankmarker) %>% 
+  filter(is.na(rankmarker)) 
+```
+
+Almost all these taxa are genera, only one taxon (`Salix fragilis x Salix pendandra`) is a hybrid. We manually add these taxonomic ranks to `parsed_names`:
+
+```{r}
+parsed_names %<>% mutate(rankmarker = case_when(
+  is.na(rankmarker) & scientificname != "Salix fragilis x Salix pentandra" ~ "genus",
+  scientificname == "Salix fragilis x Salix pentandra" ~ "hybrid",
+  TRUE ~ rankmarker))
+```
+
+Some columns contain NA's. We replace these by blanks:
+
+```{r}
+parsed_names %<>% replace_na(list(
+  specificepithet      = "",   
+  infraspecificepithet = "",
+  authorship           = "",
+  bracketauthorship    = ""))
+```
+
+Add the prefix `pn_` to the column names of `parsed_names` (to remove these columns after the mapping process):
+
+```{r}
+colnames(parsed_names) <- paste0("pn_", colnames(parsed_names))
+```
+
+Amount of species in the Taxon Core before merge:
+
+```{r, echo = F}
+(before_merge <- nrow(taxon))
+```
+
+Merge `parsed_names` with the Taxon Core:
+
+```{r}
+taxon <- inner_join(taxon, parsed_names, by = c("raw_scientificName" = "pn_scientificname"))
+```
+
+Is the amount of species in the Taxon Core the same as before the merge (should be TRUE)?
+
+```{r, echo = F}
+before_merge == nrow(taxon)
+```
+
+## Term mapping
+ 
+Map the source data to [Darwin Core Taxon](http://rs.gbif.org/core/dwc_taxon_2015-04-24.xml):
+ 
+### language
+
+```{r}
+taxon %<>% mutate(language = "en")
+```
+
+### license
+
+```{r}
+taxon %<>% mutate(license = "http://creativecommons.org/publicdomain/zero/1.0/")
+```
+
+### rightsHolder
+
+```{r}
+taxon %<>% mutate(rightsHolder = "Botanical Garden Meise")
+
+```
+
+### bibliographicCitation
+
+```{r}
+taxon %<>% mutate(bibliographicCitation = raw_bibliographicCitation) 
+```
+
+### institutionID
+
+```{r}
+taxon %<>% mutate(institutionID = "http://biocol.org/urn:lsid:biocol.org:col:15605")
+```
+
+### datasetID
+
+```{r}
+taxon %<>% mutate(datasetID = "")
+```
+
+### datasetName
+
+```{r}
+taxon %<>% mutate(datasetName = "Catalogue of the Rust Fungi of Belgium")
+```
+
+### taxonID
+
+```{r}
+taxon %<>% mutate(taxonID = raw_taxon_id)
+```
+
+### scientificName
+
+```{r}
+taxon %<>% mutate(scientificName = raw_scientificName)
+```
+
+### kingdom
+
+```{r}
+taxon %<>% mutate(kingdom = case_when(
+  raw_resourceRelation == "parasite" ~ "Fungi",
+  raw_resourceRelation == "host"     ~ "Plantae"))
+```
+
+### phylum
+
+```{r}
+taxon %<>% mutate(phylum = case_when(
+  raw_resourceRelation == "parasite" ~ "Basidiomycota",
+  raw_resourceRelation == "host"     ~ ""))
+```
+
+### order
+
+```{r}
+taxon %<>% mutate(order = case_when(
+  raw_resourceRelation == "parasite" ~ "Uredinales",
+  raw_resourceRelation == "host"     ~ ""))
+```
+
+### family
+
+```{r}
+taxon %<>% mutate(family = raw_family) %<>% replace_na(replace = list(family = "")) #' Remove NA's for host species
+```
+
+### genus
+
+```{r}
+taxon %<>% mutate(genus = pn_genusorabove) %<>% replace_na(replace = list(genus = "")) #' Remove NA's for host species
+```
+
+### specificEpithet
+
+```{r}
+taxon %<>% mutate(specificEpithet = pn_specificepithet) %<>% replace_na(replace = list(specificEpithet = "")) #' Remove NA's for host species
+```
+
+### infraspecificEpithet
+
+```{r}
+taxon %<>% mutate(infraspecificEpithet = pn_infraspecificepithet) %<>% replace_na(replace = list(infraspecificEpithet = "")) #' Remove NA's for host species
+```
+
+### taxonRank
+
+Information for `taxonRank` is contained in `pn_rankmarker`:
+
+```{r}
+taxon %>% distinct(pn_rankmarker)
+```
+
+Generate `taxonRank`by recoding abbreviations:
+
+```{r}
+taxon %<>% mutate(taxonRank = recode(pn_rankmarker,
+  "sp." = "species",
+  "var." = "variety",
+  "subsp." = "subspecies",
+  "fam." = "family",
+  "f." = "form"))
+```
+
+### scientificNameAuthorship
+
+The format specifications for `scientificNameAuthorship` is given [here](http://rs.tdwg.org/dwc/terms/history/index.htm#scientificNameAuthorship-2009-04-24).The mapping is as follows:
+* no (bracket)authorship provided: `scientificNameAuthorship` is left blank.
+* only authorship is provided, no information on bracketauthorship: we copy values in `pn_authorship`.
+* both authorship and bracketauthorship is provided: the required format here is (bracketauthorship) authorship.
+
+```{r}
+taxon %<>% mutate(scientificNameAuthorship = case_when(
+  pn_bracketauthorship != "" & pn_authorship != "" ~ paste( paste0("(", pn_bracketauthorship, ")"), pn_authorship, sep =" "),
+  pn_bracketauthorship == "" & pn_authorship != "" ~ pn_authorship,
+  TRUE ~ ""))
+```
+
+### nomenclaturalCode
+
+```{r}
+taxon %<>% mutate(nomenclaturalCode = "ICN")
+```
+
+## Post-processing
+
+Remove the original columns:
+
+```{r}
+taxon %<>% select(-starts_with("raw_"), -starts_with("pn_"))
+```
+
+Preview data:
+
+```{r}
+head(taxon)
+```
+
+Save to CSV:
+
+```{r}
+write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+```
+
+# Create distribution extension
+
+Map the data to [Species Distribution](http://rs.gbif.org/extension/gbif/1.0/distribution.xml).
+
+## Pre-processing
+
+The distribution applies to rust fungi only. We remove the host plants from `raw_data` and create `distribution`:
+
+```{r}
+distribution <- raw_data %>% filter(raw_resourceRelation == "parasite")
+```
+
+## Term mapping
+
+### taxonID
+
+```{r}
+distribution %<>% mutate(taxonID = raw_taxon_id)
+```
+
+### locationID
+
+```{r}
+distribution %<>% mutate(locationID = "ISO_3166-2:BE")
+```
+
+### locality
+
+```{r}
+distribution %<>% mutate(locality = "Belgium")
+```
+
+### countryCode
+
+```{r}
+distribution %<>% mutate(countryCode = "BE")
+```
+
+### occurrenceStatus
+
+Information for `occurrenceStatus` is contained in `raw_occurrenceStatus`:
+
+```{r}
+distribution %>% distinct(raw_occurrenceStatus)
+```
+
+These values are conform the [IUCN definitions](http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources).
+
+```{r}
+distribution %<>% mutate(occurrenceStatus = raw_occurrenceStatus)
+```
+
+### establishmentMeans
+
+establishmentMeans information is contained in `raw_establishmentMeans`:
+
+```{r}
+distribution %>% distinct(raw_establishmentMeans)
+```
+
+`alien` is not part of the [establishmentMeans vocabulary](http://rs.gbif.org/vocabulary/gbif/establishment_means.xml). Here, we use `introduced`:
+
+```{r}
+distribution %<>% mutate(establishmentMeans = recode(raw_establishmentMeans,
+  "alien" = "introduced",
+  .missing = ""))
+```
+
+### eventDate
+
+eventDate information is contained in `raw_from` (date of first observation) and `raw_to` (date of last observation). We will map this information as a ISO 8601 date range (start_date / end_date). For this, we need to clean and merge the information in `raw_from` and `raw_to`.
+
+`raw_from` contains the information for the first observation. At this point, the following date formats are given: `dd.m.yyyy`, `m.yyyy`, `m/yyyy` and `yyyy`, with the information for the days and years expressed as arabic numericals and for the months as arabic or roman numericals. We need to split `raw_from` to convert the roman numericals.
+
+```{r}
+distribution %<>% separate(raw_from, 
+                           into = c("day", "month", "year"),
+                           remove = FALSE,
+                           extra = "merge",
+                           fill = "left")     
+```
+
+Convert roman to arabic numericals in  `month`:
+
+```{r}
+distribution %<>% mutate(month = recode(month,
+    "I"   = "01",
+    "II"  = "02",
+    "III" = "03",
+    "IV"  = "04",
+    "V"   = "05",
+    "VI"  = "06",
+    "VII" = "07",
+    "VIII"= "08",
+    "IX"  = "09",
+    "X"   = "10",
+    "XI"  = "11",
+    "XII" = "12"))
+```
+
+We remerge the year, month and day information for the date of first observation and express this in a ISO 8601 format. we need to add the leading zeros to months (using `sprintf`), we combine year, month and date information with "-" (using `paste`) and we strip the trailing "-NA" if day or month is "NA" (using `gsub`):
+
+```{r}
+distribution %<>% mutate(start_date = 
+  gsub("-NA", "",
+       paste(year, 
+             sprintf("%02d", as.integer(month)),
+             sprintf("%02d", as.integer(day)),
+             sep = "-")))
+```
+
+Compare the first records of `start_date` with `raw_from`:
+
+```{r}
+distribution %>% select(raw_from, start_date) %>% head(n = 20)
+```
+
+remove `day`, `month` and `year`:
+
+```{r}
+distribution %<>% select(-day, -month, -year)
+```
+
+The information for the date of the last observation is contained in `raw_to`.
+The same principles and steps can be repeated for the mapping of `raw_to` into `end_date`
+
+Separate `raw_to` into `day`, `month` and `year`:
+
+```{r}
+distribution %<>% separate(raw_to, 
+                           into = c("day", "month", "year"),
+                           remove = FALSE,
+                           extra = "merge",
+                           fill = "left")     
+```
+
+Convert roman to arabic numericals in  `month`:
+
+```{r}
+distribution %<>% mutate(month = recode(month,
+    "I"   = "01",
+    "II"  = "02",
+    "III" = "03",
+    "IV"  = "04",
+    "V"   = "05",
+    "VI"  = "06",
+    "VII" = "07",
+    "VIII"= "08",
+    "IX"  = "09",
+    "X"   = "10",
+    "XI"  = "11",
+    "XII" = "12"))
+```
+
+we need  add the leading zeros to months (using `sprintf`), we combine year, month and date information with "-" (using `paste`) and we strip the trailing "-NA" if day or month is "NA" (using `gsub`):
+
+```{r}
+distribution %<>% mutate(end_date = 
+  gsub("-NA", "",
+       paste(year, 
+             sprintf("%02d", as.integer(month)),
+             sprintf("%02d", as.integer(day)),
+             sep = "-")))
+```
+
+Compare the first records of `end_date` with `raw_from`:
+
+```{r}
+distribution %>% select(raw_to, end_date) %>% head(n = 20)
+```
+
+remove `day`, `month` and `year`:
+
+```{r}
+distribution %<>% select(-day, -month, -year)
+```
+
+Merge `start_date` and `end_date` in `eventDate` (ISO 8601). 
+When only one date is provided (`start_date` OR `end_date`), we copy the date for both `start_date` and `end_date`. This to emphasize that a taxon was detected **exclusively** at that particular time point:
+
+```{r}
+distribution %<>% mutate(eventDate = case_when(
+  start_date == "NA" & end_date == "NA" ~ "",
+  start_date == "NA" & end_date != "NA" ~ paste(end_date, end_date, sep = "/"),
+  start_date != "NA" & end_date == "NA" ~ paste(start_date, start_date, sep = "/"),
+  TRUE ~ paste(start_date, end_date, sep = "/")))
+```
+
+Remove "/NA" or "NA/NA":
+
+```{r}
+distribution %<>% mutate(eventDate = gsub("([/][N][A]|([NA]{2}[/][NA]{2}))", "", eventDate))
+```
+
+### source
+
+```{r}
+distribution %<>% mutate(source = raw_bibliographicCitation)
+```
+
+## Post-processing
+
+Remove the original columns:
+
+```{r}
+distribution %<>% select(-starts_with("raw_"), -start_date, -end_date)
+```
+
+Preview data:
+
+```{r}
+head(distribution)
+```
+
+Save to CSV:
+
+```{r}
+write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+```
+
+# Create resource relationship extension
+
+```{r start_resource_relationship}
+resource_relationship <- raw_data
+```
+
+## Term mapping
+
+Map the data to [Resource Relationship](http://rs.gbif.org/extension/dwc/resource_relation_2018_01_18.xml).
+
+In this extension, we map all interactions between the rust fungi and host plants, with one line representing a one-to-one taxon interaction. These interactions are saved in `interactions`. We add this one-to-one taxon interactions to `resource_relationship`: 
+
+```{r}
+resource_relationship %<>% right_join(interactions, by = c("raw_scientificName" = "scientificName_parasite"))
+```
+
+### resourceID
+
+This Darwin Core term refers to the taxonID of the _object_ of the relationship. This is the taxonID of the host plants. By joining `resource_relationship` with `interactions` on the the scientificName of the parasite, the taxonID's of the host plants were removed from the `resource_relationship`. We need to extract them from `raw_data`:
+
+```{r}
+taxonID_host <- raw_data %>% filter(raw_resourceRelation == "host") %>% 
+  select(raw_scientificName, raw_taxon_id)
+```
+
+Join `resource_relationship` with `taxonID_host`:
+
+```{r}
+resource_relationship %<>% left_join(taxonID_host, by = c("scientificName_host" = "raw_scientificName"))
+```
+
+Rename `raw_taxon_id.y`:
+
+```{r}
+resource_relationship %<>% rename("resourceID" = "raw_taxon_id.y")
+```
+
+### relatedResourceID
+
+This Darwin Core term refers to the taxonID of the _subject_ of the relationship. This is the taxonID of the rust fungi.
+
+```{r}
+resource_relationship %<>% mutate(relatedResourceID = raw_taxon_id.x)  
+```
+
+### taxonID
+
+The `taxonID` refers to the `resourceID`, which is the `taxonID` of the fungi:
+
+```{r}
+resource_relationship %<>% mutate(taxonID = relatedResourceID) 
+```
+
+### relationshipOfResource	
+
+```{r}
+resource_relationship %<>% mutate(relationshipOfResource = "parasite of")
+```
+
+### relationshipAccordingTo	
+
+```{r}
+resource_relationship %<>% mutate(relationshipAccordingTo = raw_bibliographicCitation)
+```
+
+## Post-processing:
+
+Remove the original columns:
+
+```{r}
+resource_relationship %<>% select(-starts_with("raw_"), -scientificName_host)
+```
+
+Move `taxonID` to the first column:
+
+```{r}
+resource_relationship %<>% select(taxonID, everything())
+```
+
+Preview data:
+
+```{r}
+head(resource_relationship)
+```
+
+Save to CSV:
+
+```{r}
+write.csv(resource_relationship, file = dwc_relationship_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+```
