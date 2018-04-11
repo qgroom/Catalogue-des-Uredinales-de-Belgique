@@ -722,10 +722,10 @@ resource_relationship %<>% mutate(relatedResourceID = raw_taxon_id.x)
 
 ### taxonID
 
-The `taxonID` refers to the `resourceID`, which is the `taxonID` of the host plants:
+The `taxonID` refers to the `resourceID`, which is the `taxonID` of the fungi:
 
 ```{r}
-resource_relationship %<>% mutate(taxonID = resourceID) 
+resource_relationship %<>% mutate(taxonID = relatedResourceID) 
 ```
 
 ### relationshipOfResource	
@@ -746,6 +746,12 @@ Remove the original columns:
 
 ```{r}
 resource_relationship %<>% select(-starts_with("raw_"), -scientificName_host)
+```
+
+Move `taxonID` to the first column:
+
+```{r}
+resource_relationship %<>% select(taxonID, everything())
 ```
 
 Preview data:
