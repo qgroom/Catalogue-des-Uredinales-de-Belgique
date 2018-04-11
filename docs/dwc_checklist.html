@@ -13,7 +13,7 @@
 <meta name="author" content="Peter Desmet" />
 <meta name="author" content="Quentin Groom" />
 
-<meta name="date" content="2018-03-30" />
+<meta name="date" content="2018-04-11" />
 
 <title>Darwin Core mapping</title>
 
@@ -304,17 +304,502 @@ div.tocify {
 
 
 <h1 class="title toc-ignore">Darwin Core mapping</h1>
-<h3 class="subtitle"><em>For: The Catalogue of the Rust Fungi of Belgium</em></h3>
+<h3 class="subtitle"><em>For: Catalogue of the Rust Fungi of Belgium</em></h3>
 <h4 class="author"><em>Lien Reyserhove</em></h4>
 <h4 class="author"><em>Peter Desmet</em></h4>
 <h4 class="author"><em>Quentin Groom</em></h4>
-<h4 class="date"><em>2018-03-30</em></h4>
+<h4 class="date"><em>2018-04-11</em></h4>
 
 </div>
 
 
+<p>This document describes how we map the checklist data to Darwin Core. The source file for this document can be found <a href="https://github.com/trias-project/uredinales-belgium-checklist/blob/master/src/dwc_checklist.Rmd">here</a>.</p>
 <div id="setup" class="section level1">
 <h1><span class="header-section-number">1</span> Setup</h1>
+<p>Set locale (so we use UTF-8 character encoding):</p>
+<pre class="r"><code># This works on Mac OS X, might not work on other OS
+Sys.setlocale(&quot;LC_CTYPE&quot;, &quot;en_US.UTF-8&quot;)</code></pre>
+<pre><code>## [1] &quot;en_US.UTF-8&quot;</code></pre>
+<p>Load libraries:</p>
+<pre class="r"><code>library(tidyverse) # To transform data
+library(magrittr)  # For %&lt;&gt;% pipes
+library(janitor)   # To clean input data
+library(digest)    # Create hash function digests
+library(readr)     # To read a delimited file into a tibble
+library(rgbif)     # Interface to the GBIF API
+library(stringi)   # To perform string operations
+library(stringr)   # To perform string operations</code></pre>
+<p>Set file paths (all paths should be relative to this script):</p>
+<pre class="r"><code># Raw files:
+raw_data_file = &quot;../data/raw/checklist-of-rusts.tsv&quot;
+
+# Processed files:
+dwc_taxon_file = &quot;../data/processed/taxon.csv&quot;
+dwc_distribution_file = &quot;../data/processed/distribution.csv&quot;
+dwc_relationship_file = &quot;../data/processed/resourcerelationship.csv&quot;</code></pre>
+</div>
+<div id="read-and-pre-process-raw-data" class="section level1">
+<h1><span class="header-section-number">2</span> Read and pre-process raw data</h1>
+<p>Create a data frame <code>raw_data</code> from the source data:</p>
+<pre class="r"><code># Read the source data:
+raw_data &lt;- read_delim(raw_data_file, delim = &quot;\t&quot;) </code></pre>
+<p>Clean the data somewhat: remove empty rows if present</p>
+<pre class="r"><code>raw_data %&lt;&gt;% remove_empty_rows()     # Remove empty rows</code></pre>
+<div id="extract-host-plant-information" class="section level2">
+<h2><span class="header-section-number">2.1</span> Extract host plant information</h2>
+<p>The checklist includes information about rust fungi (<code>scientificName</code>) and their associated host plants (<code>hostPlant</code>). Although the publication of belgian rust fungi is our central focus, it is also informative to include the the host taxa in the taxon core. For this, we need to extract the host plant information from <code>hostPlant</code> in <code>raw data</code> and we add them to the checklist under <code>scientificName</code>.</p>
+<p>Extract the scientific names from <em>all</em> species in <code>raw_data</code> (including the scientific names of the rust fungi as an intermediate step. We need this information later for the mapping of the Resource Relationship extension, see paragraph 5):</p>
+<pre class="r"><code>host_plant &lt;- raw_data %&gt;% select(scientificName, hostPlant)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["scientificName"],"name":[1],"type":["chr"],"align":["left"]},{"label":["hostPlant"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"Hyalopsora polypodii (Dietel) Magnus","2":"Cystopteris fragilis"},{"1":"Melampsorella caryophyllacearum J. Schröt","2":"Abies alba,  Cerastium arvense,  Holosteum umbellatum,  Stellaria holostea,  Stellaria nemorum,  Moehringia trinervia"},{"1":"Melampsorella symphyti Bubák","2":"Symphytum officinale,   Abies alba"},{"1":"Melampsoridium betulinum (Fr.) Kleb.","2":"Larix decidua,  Larix kaempferi,  Betula pendula,  Betula pubescens"},{"1":"Milesina blechni (Syd. & P. Syd.) Syd.","2":"Abies alba,  Blechnum spicant"},{"1":"Naohidemyces vaccinii (G. Winter) S. Sato, Katsuya & Y. Hirats.","2":"Vaccinium myrtillus,  Vaccinium uliginosum,  Vaccinium oxycoccos,  Vaccinium vitis-idaea"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Split <code>hostPlant</code> on scientific name, using “,” as a separator:</p>
+<pre class="r"><code>host_plant %&lt;&gt;% separate(
+  hostPlant, 
+  sep = &quot;, &quot;, 
+  into = c(paste(&quot;species&quot;, c(1:20), sep = &quot;_&quot;)),
+  fill = &quot;right&quot;)</code></pre>
+<p>Gather all host species in one row (omitting “NA”):</p>
+<pre class="r"><code>host_plant %&lt;&gt;% gather(&quot;interaction&quot;, &quot;scientificName_host&quot;, starts_with(&quot;species&quot;), na.rm = TRUE)</code></pre>
+<p>Remove leading whitespaces:</p>
+<pre class="r"><code>host_plant %&lt;&gt;% mutate(scientificName_host = str_trim(scientificName_host))</code></pre>
+<p>This dataframe gives a nice structured overview of all interactions between the host plant and the parasite. We clean it and we save the information in a new dataframe <code>interactions</code>, as we will need this to construct the Resource Relationship extension (see paragraph 5):</p>
+<pre class="r"><code>interactions &lt;- host_plant %&lt;&gt;% select(-interaction) %&lt;&gt;% 
+                                         rename(&quot;scientificName_parasite&quot; = &quot;scientificName&quot;)</code></pre>
+<p>Select unique scientificNames:</p>
+<pre class="r"><code>host_plant %&lt;&gt;% distinct(scientificName_host) %&lt;&gt;% 
+  arrange(scientificName_host)</code></pre>
+<p>Rename <code>scientificName_host</code> to enable binding by rows:</p>
+<pre class="r"><code>host_plant %&lt;&gt;% rename(scientificName = scientificName_host)</code></pre>
+<p>Add a column <code>resourceRelation</code> to <code>raw_data</code> and <code>host_plant</code> to indicate whether the species in <code>scientificName</code>is a parasite or a host:</p>
+<pre class="r"><code>raw_data %&lt;&gt;% mutate(resourceRelation = &quot;parasite&quot;)
+host_plant %&lt;&gt;% mutate(resourceRelation = &quot;host&quot;)</code></pre>
+<p>Bind <code>raw_data</code> and <code>host_plant</code> by rows:</p>
+<pre class="r"><code>raw_data %&lt;&gt;% bind_rows(host_plant)</code></pre>
+</div>
+<div id="generate-taxonid" class="section level2">
+<h2><span class="header-section-number">2.2</span> Generate taxonID</h2>
+<p>To uniquely identify a taxon in the Taxon Core and reference taxa in the Extensions, we need a <code>taxonID</code>. Since we need it in all generated files, we generate it here in the raw data frame. It is a combination of <code>dataset-shortname:taxon:</code> and a hash based on the scientific name. As long as the scientific name doesn’t change, the ID will be stable:</p>
+<pre class="r"><code># Vectorize the digest function (The digest() function isn&#39;t vectorized. So if you pass in a vector, you get one value for the whole vector rather than a digest for each element of the vector):
+vdigest &lt;- Vectorize(digest)
+
+# Generate taxonID:
+raw_data %&lt;&gt;% mutate(taxon_id = paste(&quot;uredinales-belgium-checklist&quot;, &quot;taxon&quot;, vdigest(scientificName, algo=&quot;md5&quot;), sep=&quot;:&quot;))</code></pre>
+<p>Preview data:</p>
+<pre class="r"><code>head(raw_data)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["scientificName"],"name":[1],"type":["chr"],"align":["left"]},{"label":["catalogNumber"],"name":[2],"type":["int"],"align":["right"]},{"label":["part"],"name":[3],"type":["int"],"align":["right"]},{"label":["page"],"name":[4],"type":["int"],"align":["right"]},{"label":["from"],"name":[5],"type":["chr"],"align":["left"]},{"label":["to"],"name":[6],"type":["chr"],"align":["left"]},{"label":["family"],"name":[7],"type":["chr"],"align":["left"]},{"label":["hostPlant"],"name":[8],"type":["chr"],"align":["left"]},{"label":["occurrenceStatus"],"name":[9],"type":["chr"],"align":["left"]},{"label":["establishmentMeans"],"name":[10],"type":["chr"],"align":["left"]},{"label":["resourceRelation"],"name":[11],"type":["chr"],"align":["left"]},{"label":["taxon_id"],"name":[12],"type":["chr"],"align":["left"]}],"data":[{"1":"Hyalopsora polypodii (Dietel) Magnus","2":"1","3":"1","4":"11","5":"VII.1878","6":"VIII.1880","7":"Pucciniastraceae","8":"Cystopteris fragilis","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:260455576301d23f512a9650f9936ef9"},{"1":"Melampsorella caryophyllacearum J. Schröt","2":"2","3":"1","4":"11","5":"V.1888","6":"NA","7":"Pucciniastraceae","8":"Abies alba,  Cerastium arvense,  Holosteum umbellatum,  Stellaria holostea,  Stellaria nemorum,  Moehringia trinervia","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:8fe069e7f3228441fb405002b038aaf1"},{"1":"Melampsorella symphyti Bubák","2":"3","3":"1","4":"11","5":"04.X.1963","6":"15.V.2006","7":"Pucciniastraceae","8":"Symphytum officinale,   Abies alba","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:cf04e2617aba99a239404b150dd8f933"},{"1":"Melampsoridium betulinum (Fr.) Kleb.","2":"4","3":"1","4":"12","5":"13.X.2000","6":"NA","7":"Pucciniastraceae","8":"Larix decidua,  Larix kaempferi,  Betula pendula,  Betula pubescens","9":"present","10":"alien","11":"parasite","12":"uredinales-belgium-checklist:taxon:8f40d1f544b697192379f3573ae269d8"},{"1":"Milesina blechni (Syd. & P. Syd.) Syd.","2":"5","3":"1","4":"12","5":"NA","6":"NA","7":"Pucciniastraceae","8":"Abies alba,  Blechnum spicant","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:906765b70ce7ae6a8830ea9f7ea352f4"},{"1":"Naohidemyces vaccinii (G. Winter) S. Sato, Katsuya & Y. Hirats.","2":"6","3":"1","4":"12","5":"IX.1890","6":"13.VIII.1902","7":"Pucciniastraceae","8":"Vaccinium myrtillus,  Vaccinium uliginosum,  Vaccinium oxycoccos,  Vaccinium vitis-idaea","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:8e55e76ae542346be4dfe62032aef53b"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+<div id="add-bibliographiccitation" class="section level2">
+<h2><span class="header-section-number">2.3</span> Add bibliographicCitation</h2>
+<p>This checklist is a compilation of three published volumes of the <code>Catalogue des Uredinales de Belgique (The rust fungi of Belgium)</code>. For each rust fungus, a volume number (<code>part</code>) and a page number (<code>page</code>) is provided. This provides a concise description of the species, most of the information is about taxonomy, observations and the hosts. We need to integrate these citations in both the taxon core and the extensions. So, we add <code>bibliographicCitation</code> to <code>raw_data</code>.</p>
+<p>First, we complement the volume number with the full reference (given in the metadata). For this, we create the data frame <code>full_reference</code>:</p>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["part"],"name":[1],"type":["fctr"],"align":["left"]},{"label":["full_reference"],"name":[2],"type":["fctr"],"align":["left"]}],"data":[{"1":"1","2":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique.","_rn_":"1"},{"1":"2","2":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 2ème partie, Pucciniaceae (sauf Puccinia)(suite 2). Lejeunia, Revue de Botanique.","_rn_":"2"},{"1":"3","2":"Vanderweyen A & Fraiture A (2012) Catalogue des Uredinales de Belgique, 3ème partie, Pucciniaceae (genre Puccinia). Lejeunia, Revue de Botanique.","_rn_":"3"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>To join both data frames, <code>raw_part</code> in <code>full_reference</code> should be an integer:</p>
+<pre class="r"><code>full_reference %&lt;&gt;% mutate(part = as.integer(part))</code></pre>
+<p>Join both data frames:</p>
+<pre class="r"><code>raw_data &lt;- left_join(raw_data, full_reference, by = &quot;part&quot;)</code></pre>
+<p>For each rust fungus taxon, the <code>bibliographicCitation</code> will contain the full reference with page number. For all host species, we refer to “Vanderweyen, A., &amp; Fraiture, A. (2009, 2012) Catalogue des Uredinales de Belgique” (excluding volumne and page number). This is because the complete reference (with volumne and page number) applies to the rust fungus, not the host plant.</p>
+<pre class="r"><code>raw_data %&lt;&gt;% mutate(bibliographicCitation = case_when(
+  resourceRelation == &quot;parasite&quot; ~  paste(full_reference, &quot;Page:&quot;, page),
+  resourceRelation == &quot;host&quot;     ~ &quot;Vanderweyen A &amp; Fraiture A (2009 &amp; 2012) Catalogue des Uredinales de Belgique. Lejeunia, Revue de Botanique.&quot;))</code></pre>
+<p>Remove <code>full_reference</code>:</p>
+<pre class="r"><code>raw_data %&lt;&gt;% select(-full_reference)</code></pre>
+</div>
+<div id="further-pre-processing" class="section level2">
+<h2><span class="header-section-number">2.4</span> Further pre-processing:</h2>
+<p>Add prefix <code>raw_</code> to all column names in <code>raw_data</code> to avoid name clashes with Darwin Core terms:</p>
+<pre class="r"><code>colnames(raw_data) &lt;- paste0(&quot;raw_&quot;, colnames(raw_data))</code></pre>
+<p>Preview data:</p>
+<pre class="r"><code>raw_data %&gt;% head()</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["raw_scientificName"],"name":[1],"type":["chr"],"align":["left"]},{"label":["raw_catalogNumber"],"name":[2],"type":["int"],"align":["right"]},{"label":["raw_part"],"name":[3],"type":["int"],"align":["right"]},{"label":["raw_page"],"name":[4],"type":["int"],"align":["right"]},{"label":["raw_from"],"name":[5],"type":["chr"],"align":["left"]},{"label":["raw_to"],"name":[6],"type":["chr"],"align":["left"]},{"label":["raw_family"],"name":[7],"type":["chr"],"align":["left"]},{"label":["raw_hostPlant"],"name":[8],"type":["chr"],"align":["left"]},{"label":["raw_occurrenceStatus"],"name":[9],"type":["chr"],"align":["left"]},{"label":["raw_establishmentMeans"],"name":[10],"type":["chr"],"align":["left"]},{"label":["raw_resourceRelation"],"name":[11],"type":["chr"],"align":["left"]},{"label":["raw_taxon_id"],"name":[12],"type":["chr"],"align":["left"]},{"label":["raw_bibliographicCitation"],"name":[13],"type":["chr"],"align":["left"]}],"data":[{"1":"Hyalopsora polypodii (Dietel) Magnus","2":"1","3":"1","4":"11","5":"VII.1878","6":"VIII.1880","7":"Pucciniastraceae","8":"Cystopteris fragilis","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:260455576301d23f512a9650f9936ef9","13":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"Melampsorella caryophyllacearum J. Schröt","2":"2","3":"1","4":"11","5":"V.1888","6":"NA","7":"Pucciniastraceae","8":"Abies alba,  Cerastium arvense,  Holosteum umbellatum,  Stellaria holostea,  Stellaria nemorum,  Moehringia trinervia","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:8fe069e7f3228441fb405002b038aaf1","13":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"Melampsorella symphyti Bubák","2":"3","3":"1","4":"11","5":"04.X.1963","6":"15.V.2006","7":"Pucciniastraceae","8":"Symphytum officinale,   Abies alba","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:cf04e2617aba99a239404b150dd8f933","13":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"Melampsoridium betulinum (Fr.) Kleb.","2":"4","3":"1","4":"12","5":"13.X.2000","6":"NA","7":"Pucciniastraceae","8":"Larix decidua,  Larix kaempferi,  Betula pendula,  Betula pubescens","9":"present","10":"alien","11":"parasite","12":"uredinales-belgium-checklist:taxon:8f40d1f544b697192379f3573ae269d8","13":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"},{"1":"Milesina blechni (Syd. & P. Syd.) Syd.","2":"5","3":"1","4":"12","5":"NA","6":"NA","7":"Pucciniastraceae","8":"Abies alba,  Blechnum spicant","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:906765b70ce7ae6a8830ea9f7ea352f4","13":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"},{"1":"Naohidemyces vaccinii (G. Winter) S. Sato, Katsuya & Y. Hirats.","2":"6","3":"1","4":"12","5":"IX.1890","6":"13.VIII.1902","7":"Pucciniastraceae","8":"Vaccinium myrtillus,  Vaccinium uliginosum,  Vaccinium oxycoccos,  Vaccinium vitis-idaea","9":"present","10":"NA","11":"parasite","12":"uredinales-belgium-checklist:taxon:8e55e76ae542346be4dfe62032aef53b","13":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<div id="create-taxon-core" class="section level1">
+<h1><span class="header-section-number">3</span> Create taxon core</h1>
+<pre class="r"><code>taxon &lt;- raw_data</code></pre>
+<div id="generic-names" class="section level2">
+<h2><span class="header-section-number">3.1</span> generic names</h2>
+<p><code>raw_scientificName</code> includes information about the genus, specific epithet, infraspecific epithet, (bracket)authorship and taxonRank. The full scientific name will be mapped under <code>scientificName</code> in the taxon core. For enhanced readability, we parse <code>raw_scientificName</code> into its different components using the parsenames() function from <a href="https://cran.r-project.org/web/packages/rgbif/rgbif.pdf">rgbif</a>.</p>
+<pre class="r"><code>parsed_names &lt;- parsenames(taxon $ raw_scientificName)</code></pre>
+<p>Overview of the different compenents:</p>
+<pre class="r"><code>head(parsed_names)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["scientificname"],"name":[1],"type":["chr"],"align":["left"]},{"label":["type"],"name":[2],"type":["chr"],"align":["left"]},{"label":["genusorabove"],"name":[3],"type":["chr"],"align":["left"]},{"label":["specificepithet"],"name":[4],"type":["chr"],"align":["left"]},{"label":["authorship"],"name":[5],"type":["chr"],"align":["left"]},{"label":["bracketauthorship"],"name":[6],"type":["chr"],"align":["left"]},{"label":["parsed"],"name":[7],"type":["lgl"],"align":["right"]},{"label":["parsedpartially"],"name":[8],"type":["lgl"],"align":["right"]},{"label":["canonicalname"],"name":[9],"type":["chr"],"align":["left"]},{"label":["canonicalnamewithmarker"],"name":[10],"type":["chr"],"align":["left"]},{"label":["canonicalnamecomplete"],"name":[11],"type":["chr"],"align":["left"]},{"label":["rankmarker"],"name":[12],"type":["chr"],"align":["left"]},{"label":["sensu"],"name":[13],"type":["chr"],"align":["left"]},{"label":["infraspecificepithet"],"name":[14],"type":["chr"],"align":["left"]},{"label":["remarks"],"name":[15],"type":["chr"],"align":["left"]},{"label":["notho"],"name":[16],"type":["chr"],"align":["left"]}],"data":[{"1":"Hyalopsora polypodii (Dietel) Magnus","2":"SCIENTIFIC","3":"Hyalopsora","4":"polypodii","5":"Magnus","6":"Dietel","7":"TRUE","8":"FALSE","9":"Hyalopsora polypodii","10":"Hyalopsora polypodii","11":"Hyalopsora polypodii (Dietel) Magnus","12":"sp.","13":"NA","14":"NA","15":"NA","16":"NA","_rn_":"1"},{"1":"Melampsorella caryophyllacearum J. Schröt","2":"SCIENTIFIC","3":"Melampsorella","4":"caryophyllacearum","5":"J.Schröt","6":"NA","7":"TRUE","8":"FALSE","9":"Melampsorella caryophyllacearum","10":"Melampsorella caryophyllacearum","11":"Melampsorella caryophyllacearum J.Schröt","12":"sp.","13":"NA","14":"NA","15":"NA","16":"NA","_rn_":"2"},{"1":"Melampsorella symphyti Bubák","2":"SCIENTIFIC","3":"Melampsorella","4":"symphyti","5":"Bubák","6":"NA","7":"TRUE","8":"FALSE","9":"Melampsorella symphyti","10":"Melampsorella symphyti","11":"Melampsorella symphyti Bubák","12":"sp.","13":"NA","14":"NA","15":"NA","16":"NA","_rn_":"3"},{"1":"Melampsoridium betulinum (Fr.) Kleb.","2":"SCIENTIFIC","3":"Melampsoridium","4":"betulinum","5":"Kleb.","6":"Fr.","7":"TRUE","8":"FALSE","9":"Melampsoridium betulinum","10":"Melampsoridium betulinum","11":"Melampsoridium betulinum (Fr.) Kleb.","12":"sp.","13":"NA","14":"NA","15":"NA","16":"NA","_rn_":"4"},{"1":"Milesina blechni (Syd. & P. Syd.) Syd.","2":"SCIENTIFIC","3":"Milesina","4":"blechni","5":"Syd.","6":"Syd. & P.Syd.","7":"TRUE","8":"FALSE","9":"Milesina blechni","10":"Milesina blechni","11":"Milesina blechni (Syd. & P.Syd.) Syd.","12":"sp.","13":"NA","14":"NA","15":"NA","16":"NA","_rn_":"5"},{"1":"Naohidemyces vaccinii (G. Winter) S. Sato, Katsuya & Y. Hirats.","2":"SCIENTIFIC","3":"Naohidemyces","4":"vaccinii","5":"S.Sato, Katsuya & Y.Hirats.","6":"G.Winter","7":"TRUE","8":"FALSE","9":"Naohidemyces vaccinii","10":"Naohidemyces vaccinii","11":"Naohidemyces vaccinii (G.Winter) S.Sato, Katsuya & Y.Hirats.","12":"sp.","13":"NA","14":"NA","15":"NA","16":"NA","_rn_":"6"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Select the columns needed for further mapping in the taxon core, i.e. <code>genusorabove</code>, <code>specificepithet</code>, <code>authorship</code>, <code>bracketauthorship</code>, <code>rankmarker</code> and <code>infraspecificepithet</code> (these will be mapped to, respectively, <code>genus</code>, <code>specificEpithet</code>, <code>scientificNameAuthorship</code>, <code>scientificNameAuthorship</code>, <code>taxonRank</code> and <code>infraspecificEpithet</code>). We also select <code>scientificname</code> as we need this to merge <code>parsed_names</code> with <code>scientificName</code> in the Taxon Core.</p>
+<pre class="r"><code>parsed_names %&lt;&gt;% select(scientificname, genusorabove, specificepithet, authorship, bracketauthorship, rankmarker, infraspecificepithet)</code></pre>
+<p>The parsenames() function from rgbif does not identify all taxonomic ranks. We need to manually add all taxonomic ranks for which the rankmarker was left empty:</p>
+<pre class="r"><code>parsed_names %&gt;% select(scientificname, rankmarker) %&gt;% 
+  filter(is.na(rankmarker)) </code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["scientificname"],"name":[1],"type":["chr"],"align":["left"]},{"label":["rankmarker"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"Abies","2":"NA"},{"1":"Achillea","2":"NA"},{"1":"Aconitum","2":"NA"},{"1":"Actaea","2":"NA"},{"1":"Agrostis","2":"NA"},{"1":"Althaea","2":"NA"},{"1":"Amelanchier","2":"NA"},{"1":"Ammophila","2":"NA"},{"1":"Anchusa","2":"NA"},{"1":"Anemone","2":"NA"},{"1":"Angelica","2":"NA"},{"1":"Anthemis","2":"NA"},{"1":"Anthoxanthum","2":"NA"},{"1":"Apium","2":"NA"},{"1":"Artemisia","2":"NA"},{"1":"Aster","2":"NA"},{"1":"Berberis","2":"NA"},{"1":"Berula","2":"NA"},{"1":"Briza","2":"NA"},{"1":"Bromus","2":"NA"},{"1":"Cacalia","2":"NA"},{"1":"Calamagrostis","2":"NA"},{"1":"Carex","2":"NA"},{"1":"Carum","2":"NA"},{"1":"Centaurea","2":"NA"},{"1":"Cerastium","2":"NA"},{"1":"Chamaecytisus","2":"NA"},{"1":"Chrysanthemum","2":"NA"},{"1":"Cichorium","2":"NA"},{"1":"Conopodium","2":"NA"},{"1":"Crataegus","2":"NA"},{"1":"Daucus","2":"NA"},{"1":"Deschampsia","2":"NA"},{"1":"Distichlis","2":"NA"},{"1":"Euonymus","2":"NA"},{"1":"Euphorbia","2":"NA"},{"1":"Festuca","2":"NA"},{"1":"Fritillaria","2":"NA"},{"1":"Galium","2":"NA"},{"1":"Genista","2":"NA"},{"1":"Gentianella","2":"NA"},{"1":"Geranium","2":"NA"},{"1":"Hepatica","2":"NA"},{"1":"Hieracium","2":"NA"},{"1":"Hordelymus","2":"NA"},{"1":"Hordeum","2":"NA"},{"1":"Koeleria","2":"NA"},{"1":"Larix","2":"NA"},{"1":"Leontodon","2":"NA"},{"1":"Lonicera","2":"NA"},{"1":"Mahonia","2":"NA"},{"1":"Malus","2":"NA"},{"1":"Melampyrum","2":"NA"},{"1":"Milium","2":"NA"},{"1":"Muscari","2":"NA"},{"1":"Oenanthe","2":"NA"},{"1":"Origanum","2":"NA"},{"1":"Ornithogalum","2":"NA"},{"1":"Oxalis","2":"NA"},{"1":"Pastinaca","2":"NA"},{"1":"Poa","2":"NA"},{"1":"Polygonatum","2":"NA"},{"1":"Prunella","2":"NA"},{"1":"Prunus","2":"NA"},{"1":"Pyrus","2":"NA"},{"1":"Rheum","2":"NA"},{"1":"Ribes","2":"NA"},{"1":"Salicornia","2":"NA"},{"1":"Salix fragilis x Salix pentandra","2":"NA"},{"1":"Saxifraga","2":"NA"},{"1":"Scilla","2":"NA"},{"1":"Secale","2":"NA"},{"1":"Serratula","2":"NA"},{"1":"Sium","2":"NA"},{"1":"Soldanella","2":"NA"},{"1":"Suaeda","2":"NA"},{"1":"Taraxacum","2":"NA"},{"1":"Thalictrum","2":"NA"},{"1":"Torilis","2":"NA"},{"1":"Trifolium","2":"NA"},{"1":"Triticum","2":"NA"},{"1":"Urtica","2":"NA"},{"1":"Valeriana","2":"NA"},{"1":"Vinca","2":"NA"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Almost all these taxa are genera, only one taxon (<code>Salix fragilis x Salix pendandra</code>) is a hybrid. We manually add these taxonomic ranks to <code>parsed_names</code>:</p>
+<pre class="r"><code>parsed_names %&lt;&gt;% mutate(rankmarker = case_when(
+  is.na(rankmarker) &amp; scientificname != &quot;Salix fragilis x Salix pentandra&quot; ~ &quot;genus&quot;,
+  scientificname == &quot;Salix fragilis x Salix pentandra&quot; ~ &quot;hybrid&quot;,
+  TRUE ~ rankmarker))</code></pre>
+<p>Some columns contain NA’s. We replace these by blanks:</p>
+<pre class="r"><code>parsed_names %&lt;&gt;% replace_na(list(
+  specificepithet      = &quot;&quot;,   
+  infraspecificepithet = &quot;&quot;,
+  authorship           = &quot;&quot;,
+  bracketauthorship    = &quot;&quot;))</code></pre>
+<p>Add the prefix <code>pn_</code> to the column names of <code>parsed_names</code> (to remove these columns after the mapping process):</p>
+<pre class="r"><code>colnames(parsed_names) &lt;- paste0(&quot;pn_&quot;, colnames(parsed_names))</code></pre>
+<p>Amount of species in the Taxon Core before merge:</p>
+<pre><code>## [1] 755</code></pre>
+<p>Merge <code>parsed_names</code> with the Taxon Core:</p>
+<pre class="r"><code>taxon &lt;- inner_join(taxon, parsed_names, by = c(&quot;raw_scientificName&quot; = &quot;pn_scientificname&quot;))</code></pre>
+<p>Is the amount of species in the Taxon Core the same as before the merge (should be TRUE)?</p>
+<pre><code>## [1] TRUE</code></pre>
+</div>
+<div id="term-mapping" class="section level2">
+<h2><span class="header-section-number">3.2</span> Term mapping</h2>
+<p>Map the source data to <a href="http://rs.gbif.org/core/dwc_taxon_2015-04-24.xml">Darwin Core Taxon</a>:</p>
+<div id="language" class="section level3">
+<h3><span class="header-section-number">3.2.1</span> language</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(language = &quot;en&quot;)</code></pre>
+</div>
+<div id="license" class="section level3">
+<h3><span class="header-section-number">3.2.2</span> license</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(license = &quot;http://creativecommons.org/publicdomain/zero/1.0/&quot;)</code></pre>
+</div>
+<div id="rightsholder" class="section level3">
+<h3><span class="header-section-number">3.2.3</span> rightsHolder</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(rightsHolder = &quot;Botanical Garden Meise&quot;)</code></pre>
+</div>
+<div id="bibliographiccitation" class="section level3">
+<h3><span class="header-section-number">3.2.4</span> bibliographicCitation</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(bibliographicCitation = raw_bibliographicCitation) </code></pre>
+</div>
+<div id="institutionid" class="section level3">
+<h3><span class="header-section-number">3.2.5</span> institutionID</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(institutionID = &quot;http://biocol.org/urn:lsid:biocol.org:col:15605&quot;)</code></pre>
+</div>
+<div id="datasetid" class="section level3">
+<h3><span class="header-section-number">3.2.6</span> datasetID</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(datasetID = &quot;&quot;)</code></pre>
+</div>
+<div id="datasetname" class="section level3">
+<h3><span class="header-section-number">3.2.7</span> datasetName</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(datasetName = &quot;Catalogue of the Rust Fungi of Belgium&quot;)</code></pre>
+</div>
+<div id="taxonid" class="section level3">
+<h3><span class="header-section-number">3.2.8</span> taxonID</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(taxonID = raw_taxon_id)</code></pre>
+</div>
+<div id="scientificname" class="section level3">
+<h3><span class="header-section-number">3.2.9</span> scientificName</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(scientificName = raw_scientificName)</code></pre>
+</div>
+<div id="kingdom" class="section level3">
+<h3><span class="header-section-number">3.2.10</span> kingdom</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(kingdom = case_when(
+  raw_resourceRelation == &quot;parasite&quot; ~ &quot;Fungi&quot;,
+  raw_resourceRelation == &quot;host&quot;     ~ &quot;Plantae&quot;))</code></pre>
+</div>
+<div id="phylum" class="section level3">
+<h3><span class="header-section-number">3.2.11</span> phylum</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(phylum = case_when(
+  raw_resourceRelation == &quot;parasite&quot; ~ &quot;Basidiomycota&quot;,
+  raw_resourceRelation == &quot;host&quot;     ~ &quot;&quot;))</code></pre>
+</div>
+<div id="order" class="section level3">
+<h3><span class="header-section-number">3.2.12</span> order</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(order = case_when(
+  raw_resourceRelation == &quot;parasite&quot; ~ &quot;Uredinales&quot;,
+  raw_resourceRelation == &quot;host&quot;     ~ &quot;&quot;))</code></pre>
+</div>
+<div id="family" class="section level3">
+<h3><span class="header-section-number">3.2.13</span> family</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(family = raw_family) %&lt;&gt;% replace_na(replace = list(family = &quot;&quot;)) #&#39; Remove NA&#39;s for host species</code></pre>
+</div>
+<div id="genus" class="section level3">
+<h3><span class="header-section-number">3.2.14</span> genus</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(genus = pn_genusorabove) %&lt;&gt;% replace_na(replace = list(genus = &quot;&quot;)) #&#39; Remove NA&#39;s for host species</code></pre>
+</div>
+<div id="specificepithet" class="section level3">
+<h3><span class="header-section-number">3.2.15</span> specificEpithet</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(specificEpithet = pn_specificepithet) %&lt;&gt;% replace_na(replace = list(specificEpithet = &quot;&quot;)) #&#39; Remove NA&#39;s for host species</code></pre>
+</div>
+<div id="infraspecificepithet" class="section level3">
+<h3><span class="header-section-number">3.2.16</span> infraspecificEpithet</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(infraspecificEpithet = pn_infraspecificepithet) %&lt;&gt;% replace_na(replace = list(infraspecificEpithet = &quot;&quot;)) #&#39; Remove NA&#39;s for host species</code></pre>
+</div>
+<div id="taxonrank" class="section level3">
+<h3><span class="header-section-number">3.2.17</span> taxonRank</h3>
+<p>Information for <code>taxonRank</code> is contained in <code>pn_rankmarker</code>:</p>
+<pre class="r"><code>taxon %&gt;% distinct(pn_rankmarker)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["pn_rankmarker"],"name":[1],"type":["chr"],"align":["left"]}],"data":[{"1":"sp."},{"1":"var."},{"1":"genus"},{"1":"subsp."},{"1":"fam."},{"1":"f."},{"1":"hybrid"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Generate <code>taxonRank</code>by recoding abbreviations:</p>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(taxonRank = recode(pn_rankmarker,
+  &quot;sp.&quot; = &quot;species&quot;,
+  &quot;var.&quot; = &quot;variety&quot;,
+  &quot;subsp.&quot; = &quot;subspecies&quot;,
+  &quot;fam.&quot; = &quot;family&quot;,
+  &quot;f.&quot; = &quot;form&quot;))</code></pre>
+</div>
+<div id="scientificnameauthorship" class="section level3">
+<h3><span class="header-section-number">3.2.18</span> scientificNameAuthorship</h3>
+<p>The format specifications for <code>scientificNameAuthorship</code> is given <a href="http://rs.tdwg.org/dwc/terms/history/index.htm#scientificNameAuthorship-2009-04-24">here</a>.The mapping is as follows: * no (bracket)authorship provided: <code>scientificNameAuthorship</code> is left blank. * only authorship is provided, no information on bracketauthorship: we copy values in <code>pn_authorship</code>. * both authorship and bracketauthorship is provided: the required format here is (bracketauthorship) authorship.</p>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(scientificNameAuthorship = case_when(
+  pn_bracketauthorship != &quot;&quot; &amp; pn_authorship != &quot;&quot; ~ paste( paste0(&quot;(&quot;, pn_bracketauthorship, &quot;)&quot;), pn_authorship, sep =&quot; &quot;),
+  pn_bracketauthorship == &quot;&quot; &amp; pn_authorship != &quot;&quot; ~ pn_authorship,
+  TRUE ~ &quot;&quot;))</code></pre>
+</div>
+<div id="nomenclaturalcode" class="section level3">
+<h3><span class="header-section-number">3.2.19</span> nomenclaturalCode</h3>
+<pre class="r"><code>taxon %&lt;&gt;% mutate(nomenclaturalCode = &quot;ICN&quot;)</code></pre>
+</div>
+</div>
+<div id="post-processing" class="section level2">
+<h2><span class="header-section-number">3.3</span> Post-processing</h2>
+<p>Remove the original columns:</p>
+<pre class="r"><code>taxon %&lt;&gt;% select(-starts_with(&quot;raw_&quot;), -starts_with(&quot;pn_&quot;))</code></pre>
+<p>Preview data:</p>
+<pre class="r"><code>head(taxon)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["language"],"name":[1],"type":["chr"],"align":["left"]},{"label":["license"],"name":[2],"type":["chr"],"align":["left"]},{"label":["rightsHolder"],"name":[3],"type":["chr"],"align":["left"]},{"label":["bibliographicCitation"],"name":[4],"type":["chr"],"align":["left"]},{"label":["institutionID"],"name":[5],"type":["chr"],"align":["left"]},{"label":["datasetID"],"name":[6],"type":["chr"],"align":["left"]},{"label":["datasetName"],"name":[7],"type":["chr"],"align":["left"]},{"label":["taxonID"],"name":[8],"type":["chr"],"align":["left"]},{"label":["scientificName"],"name":[9],"type":["chr"],"align":["left"]},{"label":["kingdom"],"name":[10],"type":["chr"],"align":["left"]},{"label":["phylum"],"name":[11],"type":["chr"],"align":["left"]},{"label":["order"],"name":[12],"type":["chr"],"align":["left"]},{"label":["family"],"name":[13],"type":["chr"],"align":["left"]},{"label":["genus"],"name":[14],"type":["chr"],"align":["left"]},{"label":["specificEpithet"],"name":[15],"type":["chr"],"align":["left"]},{"label":["infraspecificEpithet"],"name":[16],"type":["chr"],"align":["left"]},{"label":["taxonRank"],"name":[17],"type":["chr"],"align":["left"]},{"label":["scientificNameAuthorship"],"name":[18],"type":["chr"],"align":["left"]},{"label":["nomenclaturalCode"],"name":[19],"type":["chr"],"align":["left"]}],"data":[{"1":"en","2":"http://creativecommons.org/publicdomain/zero/1.0/","3":"Botanical Garden Meise","4":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11","5":"http://biocol.org/urn:lsid:biocol.org:col:15605","6":"","7":"Catalogue of the Rust Fungi of Belgium","8":"uredinales-belgium-checklist:taxon:260455576301d23f512a9650f9936ef9","9":"Hyalopsora polypodii (Dietel) Magnus","10":"Fungi","11":"Basidiomycota","12":"Uredinales","13":"Pucciniastraceae","14":"Hyalopsora","15":"polypodii","16":"","17":"species","18":"(Dietel) Magnus","19":"ICN"},{"1":"en","2":"http://creativecommons.org/publicdomain/zero/1.0/","3":"Botanical Garden Meise","4":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11","5":"http://biocol.org/urn:lsid:biocol.org:col:15605","6":"","7":"Catalogue of the Rust Fungi of Belgium","8":"uredinales-belgium-checklist:taxon:8fe069e7f3228441fb405002b038aaf1","9":"Melampsorella caryophyllacearum J. Schröt","10":"Fungi","11":"Basidiomycota","12":"Uredinales","13":"Pucciniastraceae","14":"Melampsorella","15":"caryophyllacearum","16":"","17":"species","18":"J.Schröt","19":"ICN"},{"1":"en","2":"http://creativecommons.org/publicdomain/zero/1.0/","3":"Botanical Garden Meise","4":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11","5":"http://biocol.org/urn:lsid:biocol.org:col:15605","6":"","7":"Catalogue of the Rust Fungi of Belgium","8":"uredinales-belgium-checklist:taxon:cf04e2617aba99a239404b150dd8f933","9":"Melampsorella symphyti Bubák","10":"Fungi","11":"Basidiomycota","12":"Uredinales","13":"Pucciniastraceae","14":"Melampsorella","15":"symphyti","16":"","17":"species","18":"Bubák","19":"ICN"},{"1":"en","2":"http://creativecommons.org/publicdomain/zero/1.0/","3":"Botanical Garden Meise","4":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12","5":"http://biocol.org/urn:lsid:biocol.org:col:15605","6":"","7":"Catalogue of the Rust Fungi of Belgium","8":"uredinales-belgium-checklist:taxon:8f40d1f544b697192379f3573ae269d8","9":"Melampsoridium betulinum (Fr.) Kleb.","10":"Fungi","11":"Basidiomycota","12":"Uredinales","13":"Pucciniastraceae","14":"Melampsoridium","15":"betulinum","16":"","17":"species","18":"(Fr.) Kleb.","19":"ICN"},{"1":"en","2":"http://creativecommons.org/publicdomain/zero/1.0/","3":"Botanical Garden Meise","4":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12","5":"http://biocol.org/urn:lsid:biocol.org:col:15605","6":"","7":"Catalogue of the Rust Fungi of Belgium","8":"uredinales-belgium-checklist:taxon:906765b70ce7ae6a8830ea9f7ea352f4","9":"Milesina blechni (Syd. & P. Syd.) Syd.","10":"Fungi","11":"Basidiomycota","12":"Uredinales","13":"Pucciniastraceae","14":"Milesina","15":"blechni","16":"","17":"species","18":"(Syd. & P.Syd.) Syd.","19":"ICN"},{"1":"en","2":"http://creativecommons.org/publicdomain/zero/1.0/","3":"Botanical Garden Meise","4":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12","5":"http://biocol.org/urn:lsid:biocol.org:col:15605","6":"","7":"Catalogue of the Rust Fungi of Belgium","8":"uredinales-belgium-checklist:taxon:8e55e76ae542346be4dfe62032aef53b","9":"Naohidemyces vaccinii (G. Winter) S. Sato, Katsuya & Y. Hirats.","10":"Fungi","11":"Basidiomycota","12":"Uredinales","13":"Pucciniastraceae","14":"Naohidemyces","15":"vaccinii","16":"","17":"species","18":"(G.Winter) S.Sato, Katsuya & Y.Hirats.","19":"ICN"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Save to CSV:</p>
+<pre class="r"><code>write.csv(taxon, file = dwc_taxon_file, na = &quot;&quot;, row.names = FALSE, fileEncoding = &quot;UTF-8&quot;)</code></pre>
+</div>
+</div>
+<div id="create-distribution-extension" class="section level1">
+<h1><span class="header-section-number">4</span> Create distribution extension</h1>
+<p>Map the data to <a href="http://rs.gbif.org/extension/gbif/1.0/distribution.xml">Species Distribution</a>.</p>
+<div id="pre-processing" class="section level2">
+<h2><span class="header-section-number">4.1</span> Pre-processing</h2>
+<p>The distribution applies to rust fungi only. We remove the host plants from <code>raw_data</code> and create <code>distribution</code>:</p>
+<pre class="r"><code>distribution &lt;- raw_data %&gt;% filter(raw_resourceRelation == &quot;parasite&quot;)</code></pre>
+</div>
+<div id="term-mapping-1" class="section level2">
+<h2><span class="header-section-number">4.2</span> Term mapping</h2>
+<div id="taxonid-1" class="section level3">
+<h3><span class="header-section-number">4.2.1</span> taxonID</h3>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(taxonID = raw_taxon_id)</code></pre>
+</div>
+<div id="locationid" class="section level3">
+<h3><span class="header-section-number">4.2.2</span> locationID</h3>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(locationID = &quot;ISO_3166-2:BE&quot;)</code></pre>
+</div>
+<div id="locality" class="section level3">
+<h3><span class="header-section-number">4.2.3</span> locality</h3>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(locality = &quot;Belgium&quot;)</code></pre>
+</div>
+<div id="countrycode" class="section level3">
+<h3><span class="header-section-number">4.2.4</span> countryCode</h3>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(countryCode = &quot;BE&quot;)</code></pre>
+</div>
+<div id="occurrencestatus" class="section level3">
+<h3><span class="header-section-number">4.2.5</span> occurrenceStatus</h3>
+<p>Information for <code>occurrenceStatus</code> is contained in <code>raw_occurrenceStatus</code>:</p>
+<pre class="r"><code>distribution %&gt;% distinct(raw_occurrenceStatus)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["raw_occurrenceStatus"],"name":[1],"type":["chr"],"align":["left"]}],"data":[{"1":"present"},{"1":"doubtful"},{"1":"absent"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>These values are conform the <a href="http://www.iucnredlist.org/technical-documents/red-list-training/iucnspatialresources">IUCN definitions</a>.</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(occurrenceStatus = raw_occurrenceStatus)</code></pre>
+</div>
+<div id="establishmentmeans" class="section level3">
+<h3><span class="header-section-number">4.2.6</span> establishmentMeans</h3>
+<p>establishmentMeans information is contained in <code>raw_establishmentMeans</code>:</p>
+<pre class="r"><code>distribution %&gt;% distinct(raw_establishmentMeans)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["raw_establishmentMeans"],"name":[1],"type":["chr"],"align":["left"]}],"data":[{"1":"NA"},{"1":"alien"},{"1":"native"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p><code>alien</code> is not part of the <a href="http://rs.gbif.org/vocabulary/gbif/establishment_means.xml">establishmentMeans vocabulary</a>. Here, we use <code>introduced</code>:</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(establishmentMeans = recode(raw_establishmentMeans,
+  &quot;alien&quot; = &quot;introduced&quot;,
+  .missing = &quot;&quot;))</code></pre>
+</div>
+<div id="eventdate" class="section level3">
+<h3><span class="header-section-number">4.2.7</span> eventDate</h3>
+<p>eventDate information is contained in <code>raw_from</code> (date of first observation) and <code>raw_to</code> (date of last observation). We will map this information as a ISO 8601 date range (start_date / end_date). For this, we need to clean and merge the information in <code>raw_from</code> and <code>raw_to</code>.</p>
+<p><code>raw_from</code> contains the information for the first observation. At this point, the following date formats are given: <code>dd.m.yyyy</code>, <code>m.yyyy</code>, <code>m/yyyy</code> and <code>yyyy</code>, with the information for the days and years expressed as arabic numericals and for the months as arabic or roman numericals. We need to split <code>raw_from</code> to convert the roman numericals.</p>
+<pre class="r"><code>distribution %&lt;&gt;% separate(raw_from, 
+                           into = c(&quot;day&quot;, &quot;month&quot;, &quot;year&quot;),
+                           remove = FALSE,
+                           extra = &quot;merge&quot;,
+                           fill = &quot;left&quot;)     </code></pre>
+<p>Convert roman to arabic numericals in <code>month</code>:</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(month = recode(month,
+    &quot;I&quot;   = &quot;01&quot;,
+    &quot;II&quot;  = &quot;02&quot;,
+    &quot;III&quot; = &quot;03&quot;,
+    &quot;IV&quot;  = &quot;04&quot;,
+    &quot;V&quot;   = &quot;05&quot;,
+    &quot;VI&quot;  = &quot;06&quot;,
+    &quot;VII&quot; = &quot;07&quot;,
+    &quot;VIII&quot;= &quot;08&quot;,
+    &quot;IX&quot;  = &quot;09&quot;,
+    &quot;X&quot;   = &quot;10&quot;,
+    &quot;XI&quot;  = &quot;11&quot;,
+    &quot;XII&quot; = &quot;12&quot;))</code></pre>
+<p>We remerge the year, month and day information for the date of first observation and express this in a ISO 8601 format. we need to add the leading zeros to months (using <code>sprintf</code>), we combine year, month and date information with “-” (using <code>paste</code>) and we strip the trailing “-NA” if day or month is “NA” (using <code>gsub</code>):</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(start_date = 
+  gsub(&quot;-NA&quot;, &quot;&quot;,
+       paste(year, 
+             sprintf(&quot;%02d&quot;, as.integer(month)),
+             sprintf(&quot;%02d&quot;, as.integer(day)),
+             sep = &quot;-&quot;)))</code></pre>
+<p>Compare the first records of <code>start_date</code> with <code>raw_from</code>:</p>
+<pre class="r"><code>distribution %&gt;% select(raw_from, start_date) %&gt;% head(n = 20)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["raw_from"],"name":[1],"type":["chr"],"align":["left"]},{"label":["start_date"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"VII.1878","2":"1878-07"},{"1":"V.1888","2":"1888-05"},{"1":"04.X.1963","2":"1963-10-04"},{"1":"13.X.2000","2":"2000-10-13"},{"1":"NA","2":"__NA__"},{"1":"IX.1890","2":"1890-09"},{"1":"IX.1889","2":"1889-09"},{"1":"IX.1889","2":"1889-09"},{"1":"17.VI.1980","2":"1980-06-17"},{"1":"18.VIII.1878","2":"1878-08-18"},{"1":"07.IX.1901","2":"1901-09-07"},{"1":"VII.1879","2":"1879-07"},{"1":"NA","2":"__NA__"},{"1":"VIII.1901","2":"1901-08"},{"1":"14.V.1979","2":"1979-05-14"},{"1":"02.VII.1920","2":"1920-07-02"},{"1":"15.VIII.1876","2":"1876-08-15"},{"1":"NA","2":"__NA__"},{"1":"1920","2":"1920"},{"1":"V.1902","2":"1902-05"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>remove <code>day</code>, <code>month</code> and <code>year</code>:</p>
+<pre class="r"><code>distribution %&lt;&gt;% select(-day, -month, -year)</code></pre>
+<p>The information for the date of the last observation is contained in <code>raw_to</code>. The same principles and steps can be repeated for the mapping of <code>raw_to</code> into <code>end_date</code></p>
+<p>Separate <code>raw_to</code> into <code>day</code>, <code>month</code> and <code>year</code>:</p>
+<pre class="r"><code>distribution %&lt;&gt;% separate(raw_to, 
+                           into = c(&quot;day&quot;, &quot;month&quot;, &quot;year&quot;),
+                           remove = FALSE,
+                           extra = &quot;merge&quot;,
+                           fill = &quot;left&quot;)     </code></pre>
+<p>Convert roman to arabic numericals in <code>month</code>:</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(month = recode(month,
+    &quot;I&quot;   = &quot;01&quot;,
+    &quot;II&quot;  = &quot;02&quot;,
+    &quot;III&quot; = &quot;03&quot;,
+    &quot;IV&quot;  = &quot;04&quot;,
+    &quot;V&quot;   = &quot;05&quot;,
+    &quot;VI&quot;  = &quot;06&quot;,
+    &quot;VII&quot; = &quot;07&quot;,
+    &quot;VIII&quot;= &quot;08&quot;,
+    &quot;IX&quot;  = &quot;09&quot;,
+    &quot;X&quot;   = &quot;10&quot;,
+    &quot;XI&quot;  = &quot;11&quot;,
+    &quot;XII&quot; = &quot;12&quot;))</code></pre>
+<p>we need add the leading zeros to months (using <code>sprintf</code>), we combine year, month and date information with “-” (using <code>paste</code>) and we strip the trailing “-NA” if day or month is “NA” (using <code>gsub</code>):</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(end_date = 
+  gsub(&quot;-NA&quot;, &quot;&quot;,
+       paste(year, 
+             sprintf(&quot;%02d&quot;, as.integer(month)),
+             sprintf(&quot;%02d&quot;, as.integer(day)),
+             sep = &quot;-&quot;)))</code></pre>
+<p>Compare the first records of <code>end_date</code> with <code>raw_from</code>:</p>
+<pre class="r"><code>distribution %&gt;% select(raw_to, end_date) %&gt;% head(n = 20)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["raw_to"],"name":[1],"type":["chr"],"align":["left"]},{"label":["end_date"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"VIII.1880","2":"1880-08"},{"1":"NA","2":"__NA__"},{"1":"15.V.2006","2":"2006-05-15"},{"1":"NA","2":"__NA__"},{"1":"NA","2":"__NA__"},{"1":"13.VIII.1902","2":"1902-08-13"},{"1":"NA","2":"__NA__"},{"1":"10.IV.1917","2":"1917-04-10"},{"1":"16.VIII.2003","2":"2003-08-16"},{"1":"10.X.1999","2":"1999-10-10"},{"1":"NA","2":"__NA__"},{"1":"NA","2":"__NA__"},{"1":"NA","2":"__NA__"},{"1":"NA","2":"__NA__"},{"1":"NA","2":"__NA__"},{"1":"25.IX.2005","2":"2005-09-25"},{"1":"05.VI.1929","2":"1929-06-05"},{"1":"NA","2":"__NA__"},{"1":"31.VIII.2006","2":"2006-08-31"},{"1":"NA","2":"__NA__"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>remove <code>day</code>, <code>month</code> and <code>year</code>:</p>
+<pre class="r"><code>distribution %&lt;&gt;% select(-day, -month, -year)</code></pre>
+<p>Merge <code>start_date</code> and <code>end_date</code> in <code>eventDate</code> (ISO 8601). When only one date is provided (<code>start_date</code> OR <code>end_date</code>), we copy the date for both <code>start_date</code> and <code>end_date</code>. This to emphasize that a taxon was detected <strong>exclusively</strong> at that particular time point:</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(eventDate = case_when(
+  start_date == &quot;NA&quot; &amp; end_date == &quot;NA&quot; ~ &quot;&quot;,
+  start_date == &quot;NA&quot; &amp; end_date != &quot;NA&quot; ~ paste(end_date, end_date, sep = &quot;/&quot;),
+  start_date != &quot;NA&quot; &amp; end_date == &quot;NA&quot; ~ paste(start_date, start_date, sep = &quot;/&quot;),
+  TRUE ~ paste(start_date, end_date, sep = &quot;/&quot;)))</code></pre>
+<p>Remove “/NA” or “NA/NA”:</p>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(eventDate = gsub(&quot;([/][N][A]|([NA]{2}[/][NA]{2}))&quot;, &quot;&quot;, eventDate))</code></pre>
+</div>
+<div id="source" class="section level3">
+<h3><span class="header-section-number">4.2.8</span> source</h3>
+<pre class="r"><code>distribution %&lt;&gt;% mutate(source = raw_bibliographicCitation)</code></pre>
+</div>
+</div>
+<div id="post-processing-1" class="section level2">
+<h2><span class="header-section-number">4.3</span> Post-processing</h2>
+<p>Remove the original columns:</p>
+<pre class="r"><code>distribution %&lt;&gt;% select(-starts_with(&quot;raw_&quot;), -start_date, -end_date)</code></pre>
+<p>Preview data:</p>
+<pre class="r"><code>head(distribution)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["taxonID"],"name":[1],"type":["chr"],"align":["left"]},{"label":["locationID"],"name":[2],"type":["chr"],"align":["left"]},{"label":["locality"],"name":[3],"type":["chr"],"align":["left"]},{"label":["countryCode"],"name":[4],"type":["chr"],"align":["left"]},{"label":["occurrenceStatus"],"name":[5],"type":["chr"],"align":["left"]},{"label":["establishmentMeans"],"name":[6],"type":["chr"],"align":["left"]},{"label":["eventDate"],"name":[7],"type":["chr"],"align":["left"]},{"label":["source"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"uredinales-belgium-checklist:taxon:260455576301d23f512a9650f9936ef9","2":"ISO_3166-2:BE","3":"Belgium","4":"BE","5":"present","6":"","7":"1878-07/1880-08","8":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"uredinales-belgium-checklist:taxon:8fe069e7f3228441fb405002b038aaf1","2":"ISO_3166-2:BE","3":"Belgium","4":"BE","5":"present","6":"","7":"1888-05/1888-05","8":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"uredinales-belgium-checklist:taxon:cf04e2617aba99a239404b150dd8f933","2":"ISO_3166-2:BE","3":"Belgium","4":"BE","5":"present","6":"","7":"1963-10-04/2006-05-15","8":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"uredinales-belgium-checklist:taxon:8f40d1f544b697192379f3573ae269d8","2":"ISO_3166-2:BE","3":"Belgium","4":"BE","5":"present","6":"introduced","7":"2000-10-13/2000-10-13","8":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"},{"1":"uredinales-belgium-checklist:taxon:906765b70ce7ae6a8830ea9f7ea352f4","2":"ISO_3166-2:BE","3":"Belgium","4":"BE","5":"present","6":"","7":"","8":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"},{"1":"uredinales-belgium-checklist:taxon:8e55e76ae542346be4dfe62032aef53b","2":"ISO_3166-2:BE","3":"Belgium","4":"BE","5":"present","6":"","7":"1890-09/1902-08-13","8":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Save to CSV:</p>
+<pre class="r"><code>write.csv(distribution, file = dwc_distribution_file, na = &quot;&quot;, row.names = FALSE, fileEncoding = &quot;UTF-8&quot;)</code></pre>
+</div>
+</div>
+<div id="create-resource-relationship-extension" class="section level1">
+<h1><span class="header-section-number">5</span> Create resource relationship extension</h1>
+<pre class="r"><code>resource_relationship &lt;- raw_data</code></pre>
+<div id="term-mapping-2" class="section level2">
+<h2><span class="header-section-number">5.1</span> Term mapping</h2>
+<p>Map the data to <a href="http://rs.gbif.org/extension/dwc/resource_relation_2018_01_18.xml">Resource Relationship</a>.</p>
+<p>In this extension, we map all interactions between the rust fungi and host plants, with one line representing a one-to-one taxon interaction. These interactions are saved in <code>interactions</code>. We add this one-to-one taxon interactions to <code>resource_relationship</code>:</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% right_join(interactions, by = c(&quot;raw_scientificName&quot; = &quot;scientificName_parasite&quot;))</code></pre>
+<div id="resourceid" class="section level3">
+<h3><span class="header-section-number">5.1.1</span> resourceID</h3>
+<p>This Darwin Core term refers to the taxonID of the <em>object</em> of the relationship. This is the taxonID of the host plants. By joining <code>resource_relationship</code> with <code>interactions</code> on the the scientificName of the parasite, the taxonID’s of the host plants were removed from the <code>resource_relationship</code>. We need to extract them from <code>raw_data</code>:</p>
+<pre class="r"><code>taxonID_host &lt;- raw_data %&gt;% filter(raw_resourceRelation == &quot;host&quot;) %&gt;% 
+  select(raw_scientificName, raw_taxon_id)</code></pre>
+<p>Join <code>resource_relationship</code> with <code>taxonID_host</code>:</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% left_join(taxonID_host, by = c(&quot;scientificName_host&quot; = &quot;raw_scientificName&quot;))</code></pre>
+<p>Rename <code>raw_taxon_id.y</code>:</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% rename(&quot;resourceID&quot; = &quot;raw_taxon_id.y&quot;)</code></pre>
+</div>
+<div id="relatedresourceid" class="section level3">
+<h3><span class="header-section-number">5.1.2</span> relatedResourceID</h3>
+<p>This Darwin Core term refers to the taxonID of the <em>subject</em> of the relationship. This is the taxonID of the rust fungi.</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% mutate(relatedResourceID = raw_taxon_id.x)  </code></pre>
+</div>
+<div id="taxonid-2" class="section level3">
+<h3><span class="header-section-number">5.1.3</span> taxonID</h3>
+<p>The <code>taxonID</code> refers to the <code>resourceID</code>, which is the <code>taxonID</code> of the fungi:</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% mutate(taxonID = relatedResourceID) </code></pre>
+</div>
+<div id="relationshipofresource" class="section level3">
+<h3><span class="header-section-number">5.1.4</span> relationshipOfResource</h3>
+<pre class="r"><code>resource_relationship %&lt;&gt;% mutate(relationshipOfResource = &quot;parasite of&quot;)</code></pre>
+</div>
+<div id="relationshipaccordingto" class="section level3">
+<h3><span class="header-section-number">5.1.5</span> relationshipAccordingTo</h3>
+<pre class="r"><code>resource_relationship %&lt;&gt;% mutate(relationshipAccordingTo = raw_bibliographicCitation)</code></pre>
+</div>
+</div>
+<div id="post-processing-2" class="section level2">
+<h2><span class="header-section-number">5.2</span> Post-processing:</h2>
+<p>Remove the original columns:</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% select(-starts_with(&quot;raw_&quot;), -scientificName_host)</code></pre>
+<p>Move <code>taxonID</code> to the first column:</p>
+<pre class="r"><code>resource_relationship %&lt;&gt;% select(taxonID, everything())</code></pre>
+<p>Preview data:</p>
+<pre class="r"><code>head(resource_relationship)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["taxonID"],"name":[1],"type":["chr"],"align":["left"]},{"label":["resourceID"],"name":[2],"type":["chr"],"align":["left"]},{"label":["relatedResourceID"],"name":[3],"type":["chr"],"align":["left"]},{"label":["relationshipOfResource"],"name":[4],"type":["chr"],"align":["left"]},{"label":["relationshipAccordingTo"],"name":[5],"type":["chr"],"align":["left"]}],"data":[{"1":"uredinales-belgium-checklist:taxon:260455576301d23f512a9650f9936ef9","2":"uredinales-belgium-checklist:taxon:d1a10d22fbadf1d2edba815dd0e0e98e","3":"uredinales-belgium-checklist:taxon:260455576301d23f512a9650f9936ef9","4":"parasite of","5":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"uredinales-belgium-checklist:taxon:8fe069e7f3228441fb405002b038aaf1","2":"uredinales-belgium-checklist:taxon:cbf7427c90512ca36cbb2b484d678ffc","3":"uredinales-belgium-checklist:taxon:8fe069e7f3228441fb405002b038aaf1","4":"parasite of","5":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"uredinales-belgium-checklist:taxon:cf04e2617aba99a239404b150dd8f933","2":"uredinales-belgium-checklist:taxon:eb8274c1dc18a90b65cf5e813a6faa5c","3":"uredinales-belgium-checklist:taxon:cf04e2617aba99a239404b150dd8f933","4":"parasite of","5":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 11"},{"1":"uredinales-belgium-checklist:taxon:8f40d1f544b697192379f3573ae269d8","2":"uredinales-belgium-checklist:taxon:b1ff1c8b1a8af95288d93b24fa6e0342","3":"uredinales-belgium-checklist:taxon:8f40d1f544b697192379f3573ae269d8","4":"parasite of","5":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"},{"1":"uredinales-belgium-checklist:taxon:906765b70ce7ae6a8830ea9f7ea352f4","2":"uredinales-belgium-checklist:taxon:cbf7427c90512ca36cbb2b484d678ffc","3":"uredinales-belgium-checklist:taxon:906765b70ce7ae6a8830ea9f7ea352f4","4":"parasite of","5":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"},{"1":"uredinales-belgium-checklist:taxon:8e55e76ae542346be4dfe62032aef53b","2":"uredinales-belgium-checklist:taxon:5e765c85e71f27cc01872adda3824b83","3":"uredinales-belgium-checklist:taxon:8e55e76ae542346be4dfe62032aef53b","4":"parasite of","5":"Vanderweyen A & Fraiture A (2009) Catalogue des Uredinales de Belgique, 1re partie, Chaconiaceae, Coleosporiaceae, Cronartiaceae, Melampsoraceae, Phragmidiaceae, Pucciniastraceae, Raveneliaceae et Uropyxidaceae. Lejeunia, Revue de Botanique. Page: 12"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Save to CSV:</p>
+<pre class="r"><code>write.csv(resource_relationship, file = dwc_relationship_file, na = &quot;&quot;, row.names = FALSE, fileEncoding = &quot;UTF-8&quot;)</code></pre>
+</div>
 </div>
 
 
