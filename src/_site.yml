@@ -5,7 +5,7 @@ navbar:
   title: "uredinales-belgium-checklist"
   left:
     - text: "Darwin Core mapping"
-      href: dwc_checklist.html
+      href: dwc_mapping.html
   right:
     - icon: fa-github fa-lg
       href: https://github.com/trias-project/uredinales-belgium-checklist
