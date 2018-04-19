@@ -21,7 +21,7 @@ The Catalogue of the Rust Fungi of Belgium is a compilation of the published vol
 ## Published dataset
 
 * [Dataset on the IPT](http://ipt.biodiversity.be/resource?r=uredinales-belgium-checklist)
-* [Dataset on GBIF](https://www.gbif.org/dataset/b043c480-dd36-4f4f-aa82-e188753ff09d)
+* [Dataset on GBIF](https://doi.org/10.15468/2dboyn)
 
 ## Repo structure
 
