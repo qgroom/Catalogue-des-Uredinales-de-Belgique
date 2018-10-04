@@ -16,7 +16,6 @@ The Catalogue of the Rust Fungi of Belgium is a compilation of the published vol
 
 [source data](https://github.com/trias-project/uredinales-belgium-checklist/blob/master/data/raw) → Darwin Core [mapping script](http://trias-project.github.io/uredinales-belgium-checklist/dwc_mapping.html) → generated [Darwin Core files](https://github.com/trias-project/uredinales-belgium-checklist/blob/master/data/processed)
 
-
 ## Published dataset
 
 * [Dataset on the IPT](http://ipt.biodiversity.be/resource?r=uredinales-belgium-checklist)
@@ -24,22 +23,24 @@ The Catalogue of the Rust Fungi of Belgium is a compilation of the published vol
 
 ## Repo structure
 
-The repository structure is based on [Cookiecutter Data Science](http://drivendata.github.io/cookiecutter-data-science/). Files and directories indicated with `GENERATED` should not be edited manually.
+The repository structure is based on [Cookiecutter Data Science](http://drivendata.github.io/cookiecutter-data-science/) and the [Checklist recipe](https://github.com/trias-project/checklist-recipe). Files and directories indicated with `GENERATED` should not be edited manually.
 
 ```
-├── README.md         : Description of this repository
-├── LICENSE           : Repository license
-├── .gitignore        : Files and directories to be ignored by git
+├── README.md              : Description of this repository
+├── LICENSE                : Repository license
+├── uredinales-belgium-checklist.Rproj : RStudio project file
+├── .gitignore             : Files and directories to be ignored by git
 │
 ├── data
-│   ├── raw           : Source data, input for mapping script
-│   └── processed     : Darwin Core output of mapping script GENERATED
+│   ├── raw                : Source data, input for mapping script
+│   └── processed          : Darwin Core output of mapping script GENERATED
 │
-├── docs              : Repository website GENERATED
+├── docs                   : Repository website GENERATED
 │
 └── src
-    ├── dwc_mapping.Rmd : Darwin Core mapping script, core functionality of this repository
-    └── src.Rproj       : RStudio project file
+    ├── dwc_mapping.Rmd    : Darwin Core mapping script, core functionality of this repository
+    ├── _site.yml          : Settings to build website in docs/
+    └── index.Rmd          : Template for website homepage
 ```
 
 ## Installation
@@ -49,7 +50,7 @@ The repository structure is based on [Cookiecutter Data Science](http://drivenda
 3. Open the `dwc_mapping.Rmd` [R Markdown file](https://rmarkdown.rstudio.com/) in RStudio
 4. Install any required packages
 5. Click `Run > Run All` to generate the processed data
-6. Alternatively, click `Build > Build website` to generate the processed data and build the website in `/docs`
+6. Alternatively, click `Build > Build website` to generate the processed data and build the website in `docs/`
 
 ## Contributors
 
