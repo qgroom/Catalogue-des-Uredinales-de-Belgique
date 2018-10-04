@@ -444,7 +444,7 @@ head(taxon)
 Save to CSV:
 
 ```{r}
-write.csv(taxon, file = dwc_taxon_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+write_csv(taxon, dwc_taxon_file, na = "")
 ```
 
 # Create distribution extension
@@ -664,7 +664,7 @@ head(distribution)
 Save to CSV:
 
 ```{r}
-write.csv(distribution, file = dwc_distribution_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+write_csv(distribution, dwc_distribution_file, na = "")
 ```
 
 # Create resource relationship extension
@@ -755,5 +755,5 @@ head(resource_relationship)
 Save to CSV:
 
 ```{r}
-write.csv(resource_relationship, file = dwc_relationship_file, na = "", row.names = FALSE, fileEncoding = "UTF-8")
+write_csv(resource_relationship, dwc_relationship_file, na = "")
 ```
